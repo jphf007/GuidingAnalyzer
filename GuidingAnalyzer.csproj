@@ -1,0 +1,91 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>NINA.Plugin.GuidingAnalyzer</AssemblyName>
+    <RootNamespace>GuidingAnalyzer</RootNamespace>
+    <Version>1.0.0.1</Version>
+    <Authors>JPH</Authors>
+    <Description>Advanced PHD2 guiding analysis plugin for NINA</Description>
+    <!-- AssemblyInfo.cs is handwritten — disable auto-generation -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
+    <!-- Copy all dependency DLLs to the output folder -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <NoWarn>NU1701</NoWarn>
+  </PropertyGroup>
+
+  <!-- XAML pages -->
+  <ItemGroup>
+    <Page Include="GuidingAnalyzerDockableView.xaml" />
+    <Page Include="GuidingAnalyzerView.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ExcludeAssets=runtime: provided by NINA, do not copy into the plugin -->
+    <PackageReference Include="NINA.Plugin"    Version="3.2.0.9001">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="NINA.WPF.Base" Version="3.2.0.9001">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="NINA.Equipment" Version="3.2.0.9001">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.ComponentModel.Composition" Version="8.0.0" />
+    <PackageReference Include="OxyPlot.Wpf"                       Version="2.2.0" />
+    <PackageReference Include="MathNet.Numerics"                   Version="5.0.0" />
+    <PackageReference Include="PdfSharp-MigraDoc-GDI"             Version="6.1.1" />
+    <PackageReference Include="CsvHelper"                          Version="33.1.0" />
+    <PackageReference Include="Newtonsoft.Json"                    Version="13.0.3" />
+    <PackageReference Include="CommunityToolkit.Mvvm"             Version="8.4.0" />
+  </ItemGroup>
+
+  <!--
+    Automatic deployment to NINA after each build.
+    Uses AssemblyTitle from the project (GuidingAnalyzer) as the plugin folder name,
+    matching the convention used by the NINA plugin manager.
+  -->
+  <Target Name="DeployToNina" AfterTargets="Build">
+    <PropertyGroup>
+      <NinaPluginDir>$(LOCALAPPDATA)\NINA\Plugins\3.0.0\GuidingAnalyzer</NinaPluginDir>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(NinaPluginDir)" />
+
+    <!-- 1. Main DLL (copied explicitly so it is not excluded by NINA.*) -->
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll"
+          DestinationFolder="$(NinaPluginDir)"
+          SkipUnchangedFiles="true" />
+
+    <!-- 2. Third-party dependencies (excluding NINA.*, Microsoft.Web.*, Microsoft.Extensions.*) -->
+    <ItemGroup>
+      <PluginDeps Include="$(OutputPath)*.dll"
+                  Exclude="$(OutputPath)$(AssemblyName).dll;
+                           $(OutputPath)NINA.*.dll;
+                           $(OutputPath)Microsoft.Web.*.dll;
+                           $(OutputPath)Microsoft.Extensions.*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PluginDeps)"
+          DestinationFolder="$(NinaPluginDir)"
+          SkipUnchangedFiles="true" />
+
+    <!-- 3. Native libs (runtimes) -->
+    <ItemGroup>
+      <RuntimeFiles Include="$(OutputPath)runtimes\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RuntimeFiles)"
+          DestinationFolder="$(NinaPluginDir)\runtimes\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+
+    <Message Text="Plugin deployed to $(NinaPluginDir)" Importance="high" />
+  </Target>
+
+</Project>

@@ -1,0 +1,1928 @@
+<UserControl x:Class="GuidingAnalyzer.GuidingAnalyzerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:oxy="http://oxyplot.org/wpf"
+             xmlns:local="clr-namespace:GuidingAnalyzer"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="#1E1E2E"
+             Foreground="White">
+
+    <UserControl.Resources>
+        <!-- Convertit un bool en Visible/Collapsed -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- Inverse : False → Visible, True → Collapsed -->
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis"/>
+        <!-- Retourne True si la chaîne contient le paramètre -->
+        <local:StringContainsConverter x:Key="StartsWithConverter"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- BARRE D'OUTILS                                                  -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="0" Background="#2A2A3E" Padding="8,6">
+            <StackPanel Orientation="Horizontal">
+                <Button Command="{Binding LoadFileCommand}"
+                        Background="#3A7BD5" Foreground="White"
+                        Padding="12,6" BorderThickness="0" Margin="0,0,8,0"
+                        ToolTip="Charger un fichier log PHD2">
+                    <TextBlock Text="Load PHD2 log"/>
+                </Button>
+                <!-- Nom de fichier sans chemin -->
+                <TextBlock Text="{Binding SelectedFilePath, StringFormat='  {0}'}"
+                           VerticalAlignment="Center" Foreground="#AAAACC"
+                           MaxWidth="280" TextTrimming="CharacterEllipsis" Margin="0,0,16,0"/>
+                <Button Command="{Binding ExportCsvCommand}"
+                        Background="#2E7D32" Foreground="White"
+                        Padding="10,6" BorderThickness="0" Margin="0,0,4,0">
+                    <TextBlock Text="Export CSV"/>
+                </Button>
+                <Button Command="{Binding ExportJsonCommand}"
+                        Background="#1565C0" Foreground="White"
+                        Padding="10,6" BorderThickness="0">
+                    <TextBlock Text="Export JSON"/>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- SÉLECTEUR DE SESSION + INFO CALIBRATION                         -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="1" Background="#1E1E35" Padding="8,5"
+                Visibility="{Binding HasSessions, Converter={StaticResource BoolToVis}}">
+            <WrapPanel Orientation="Horizontal">
+                <TextBlock Text="Session:" Foreground="#AAAACC" FontSize="11"
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox ItemsSource="{Binding AvailableSessions}"
+                          SelectedItem="{Binding SelectedSession, Mode=TwoWay}"
+                          Background="#2A2A4E" Foreground="White"
+                          BorderBrush="#3A3A5E" MinWidth="380"
+                          VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Foreground="White" FontSize="11">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="Session {0}  —  {1} frames  —  {2:HH:mm:ss}">
+                                        <Binding Path="SessionIndex"/>
+                                        <Binding Path="RawPoints.Count"/>
+                                        <Binding Path="StartTime"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <!-- Calibration associée (visible seulement si présente) -->
+                <Border Margin="16,0,0,0" VerticalAlignment="Center"
+                        Background="#1A3020" CornerRadius="4" Padding="8,3"
+                        DataContext="{Binding SelectedSession}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Calibration}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="⊙ Cal. " Foreground="#81C784" FontSize="11" FontWeight="Bold"/>
+                        <TextBlock Foreground="#A5D6A7" FontSize="11">
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="{}{0:dd/MM HH:mm}  RA={1:F1}°  DEC={2:F1}°">
+                                    <Binding Path="Calibration.StartTime"/>
+                                    <Binding Path="Calibration.RaAngleDeg"/>
+                                    <Binding Path="Calibration.DecAngleDeg"/>
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <!-- Pas de calibration (visible seulement si absente) -->
+                <Border Margin="16,0,0,0" VerticalAlignment="Center"
+                        Background="#2A1A1A" CornerRadius="4" Padding="8,3"
+                        DataContext="{Binding SelectedSession}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Calibration}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="No preceding calibration" Foreground="#EF9A9A" FontSize="11"/>
+                </Border>
+            </WrapPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- BANDE DE STATISTIQUES                                           -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="2" Background="#252535" Padding="10,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                    <TextBlock Text="RMS RA" Foreground="#AAAACC" FontSize="10" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding RaRmsText}" Foreground="#64B5F6" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                    <TextBlock Text="RMS DEC" Foreground="#AAAACC" FontSize="10" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding DecRmsText}" Foreground="#FFB74D" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                    <TextBlock Text="Total RMS" Foreground="#AAAACC" FontSize="10" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding TotalRmsText}" Foreground="#FFFFFF" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- RA Drift -->
+                <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                    <TextBlock Text="RA Drift" Foreground="#AAAACC" FontSize="10" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding RaDriftText}" Foreground="#64B5F6" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- DEC Drift -->
+                <StackPanel Grid.Column="4" HorizontalAlignment="Center">
+                    <TextBlock Text="DEC Drift" Foreground="#AAAACC" FontSize="10" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding DecDriftText}" Foreground="#FFB74D" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="5" HorizontalAlignment="Center">
+                    <TextBlock Text="Frames" Foreground="#AAAACC" FontSize="10" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding FrameCountText}" Foreground="#CE93D8" FontSize="12" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <Border Grid.Column="6" Background="#1A237E" CornerRadius="6" Padding="12,4" Margin="8,0,0,0">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="QUALITY" Foreground="#AAAACC" FontSize="9" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding QualityGradeText}" Foreground="#FFEB3B"
+                                   FontSize="11" FontWeight="Bold" HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" MaxWidth="200"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- ONGLETS PRINCIPAUX                                              -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <TabControl Grid.Row="3" Background="#1E1E2E" BorderThickness="0"
+                    x:Name="MainTabControl">
+
+            <!-- ── PHD2 Curves ─────────────────────────────────────────── -->
+            <TabItem Header="PHD2 Curves" Background="#252535" Foreground="White">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Barre de contrôle : checkboxes RA / DEC -->
+                    <Border Grid.Row="0" Background="#252535" Padding="8,5">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Show: " Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <CheckBox IsChecked="{Binding ShowRa}" Style="{x:Null}"
+                                      Foreground="#6495ED" FontSize="11"
+                                      VerticalAlignment="Center" Margin="0,0,16,0">
+                                <CheckBox.Content>
+                                    <TextBlock Text="RA" Foreground="#6495ED" FontWeight="Bold"/>
+                                </CheckBox.Content>
+                            </CheckBox>
+                            <CheckBox IsChecked="{Binding ShowDec}" Style="{x:Null}"
+                                      Foreground="#FFA500" FontSize="11"
+                                      VerticalAlignment="Center">
+                                <CheckBox.Content>
+                                    <TextBlock Text="DEC" Foreground="#FFA500" FontWeight="Bold"/>
+                                </CheckBox.Content>
+                            </CheckBox>
+                            <TextBlock Text="  (Scroll = zoom  |  Left click = pan  |  Double-click = reset)"
+                                       Foreground="#555577" FontSize="10" VerticalAlignment="Center" Margin="20,0,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Courbe erreurs brutes -->
+                    <Grid Grid.Row="1">
+                        <oxy:PlotView Model="{Binding GuidingCurvePlot}" Background="#1E1E2E" Margin="4"
+                                      x:Name="GuidingPlot"
+                                      MouseMove="PlotView_MouseMove"
+                                      MouseLeave="PlotView_MouseLeave"/>
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
+                                Padding="6,2" FontSize="10" Background="#333355" Foreground="#AAAACC"
+                                BorderThickness="1" BorderBrush="#555577" Cursor="Hand"
+                                Click="ResetGuidingZoom_Click">
+                            <TextBlock Text="⟳ Reset"/>
+                        </Button>
+                    </Grid>
+
+                    <!-- Courbe monture reconstituée -->
+                    <Grid Grid.Row="2">
+                        <oxy:PlotView Model="{Binding MountCurvePlot}" Background="#1E1E2E" Margin="4"
+                                      x:Name="MountPlot"
+                                      MouseMove="PlotView_MouseMove"
+                                      MouseLeave="PlotView_MouseLeave"/>
+                        <!-- Boutons superposés en haut à droite -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0">
+                            <ToggleButton IsChecked="{Binding ShowDriftCorrected}"
+                                          Padding="6,2" FontSize="10" Cursor="Hand"
+                                          BorderThickness="1" Margin="0,0,6,0"
+                                          OverridesDefaultStyle="True">
+                                <ToggleButton.Style>
+                                    <Style TargetType="ToggleButton">
+                                        <Setter Property="Background"   Value="#333355"/>
+                                        <Setter Property="Foreground"   Value="#AAAACC"/>
+                                        <Setter Property="BorderBrush"  Value="#555577"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ToggleButton">
+                                                    <Border Background="{TemplateBinding Background}"
+                                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                                            Padding="{TemplateBinding Padding}"
+                                                            CornerRadius="2">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter Property="Background"   Value="#1A5C3A"/>
+                                                <Setter Property="Foreground"   Value="#81C784"/>
+                                                <Setter Property="BorderBrush"  Value="#81C784"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ToggleButton.Style>
+                                <TextBlock Text="⇥ Drift Correction" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+                            </ToggleButton>
+                            <Button Padding="6,2" FontSize="10" Background="#333355" Foreground="#AAAACC"
+                                    BorderThickness="1" BorderBrush="#555577" Cursor="Hand"
+                                    Click="ResetMountZoom_Click">
+                                <TextBlock Text="⟳ Reset"/>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- ── FFT Analysis ──────────────────────────────────────────── -->
+            <TabItem Header="FFT Analysis" Background="#252535" Foreground="White">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>  <!-- sélecteur mode -->
+                        <RowDefinition Height="*"/>     <!-- RA -->
+                        <RowDefinition Height="*"/>     <!-- DEC -->
+                    </Grid.RowDefinitions>
+
+                    <!-- ── Barre de sélection mode ── -->
+                    <Border Grid.Row="0" Background="#252540" Padding="10,6">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Mode: " Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <RadioButton Content="Drift-corrected (with PHD2 corrections)"
+                                         IsChecked="{Binding FftShowCorrected, Mode=TwoWay}"
+                                         Foreground="#64B5F6" FontSize="11" VerticalAlignment="Center" Margin="0,0,20,0"
+                                         GroupName="FftMode"/>
+                            <RadioButton Content="RA Corrections Removed (raw mount)"
+                                         IsChecked="{Binding FftShowUncorrected, Mode=TwoWay}"
+                                         Foreground="#FFB74D" FontSize="11" VerticalAlignment="Center"
+                                         GroupName="FftMode"/>
+                            <TextBlock Text="  |  Scroll = zoom X  |  Double-click = reset  |  Y zoom disabled"
+                                       Foreground="#444466" FontSize="10" VerticalAlignment="Center" Margin="20,0,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ── RA ── -->
+                    <Grid Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Drift-corrected -->
+                        <Grid Visibility="{Binding FftShowCorrected, Converter={StaticResource BoolToVis}}">
+                            <oxy:PlotView Model="{Binding FftRaPlot}" Background="#1E1E2E" Margin="4"
+                                          x:Name="FftRaPlotView"/>
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
+                                    Padding="6,2" FontSize="10" Background="#333355" Foreground="#AAAACC"
+                                    BorderThickness="1" BorderBrush="#555577" Cursor="Hand"
+                                    Click="ResetFftRaZoom_Click"><TextBlock Text="⟳ Reset"/></Button>
+                        </Grid>
+                        <!-- Corrections Removed -->
+                        <Grid Visibility="{Binding FftShowUncorrected, Converter={StaticResource BoolToVis}}">
+                            <oxy:PlotView Model="{Binding FftRaUncorrectedPlot}" Background="#1E1E2E" Margin="4"
+                                          x:Name="FftRaUncorrPlotView"/>
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
+                                    Padding="6,2" FontSize="10" Background="#333355" Foreground="#AAAACC"
+                                    BorderThickness="1" BorderBrush="#555577" Cursor="Hand"
+                                    Click="ResetFftRaUncorrZoom_Click"><TextBlock Text="⟳ Reset"/></Button>
+                        </Grid>
+
+                        <!-- Tableau des pics RA -->
+                        <Expander Grid.Row="1" Background="#1E1E30" Foreground="White" IsExpanded="True">
+                            <Expander.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Detected RA peaks — " FontSize="11" Foreground="#AAAACC"/>
+                                    <TextBlock Text="Drift-corrected" FontSize="11" Foreground="#64B5F6"
+                                               Visibility="{Binding FftShowCorrected, Converter={StaticResource BoolToVis}}"/>
+                                    <TextBlock Text="Corrections Removed" FontSize="11" Foreground="#FFB74D"
+                                               Visibility="{Binding FftShowUncorrected, Converter={StaticResource BoolToVis}}"/>
+                                </StackPanel>
+                            </Expander.Header>
+                            <StackPanel>
+                                <!-- En-tête tableau -->
+                                <Grid Margin="8,4,8,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="60"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Period" Foreground="#666688" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" Text="Amplitude" Foreground="#666688" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="2" Text="Confidence" Foreground="#666688" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="3" Text="Interprétation" Foreground="#666688" FontSize="10" FontWeight="Bold"/>
+                                </Grid>
+                                <!-- Pics Drift-corrected -->
+                                <ItemsControl Margin="8,0"
+                                    ItemsSource="{Binding CurrentSession.FftRa.SignificantPeaks}"
+                                    Visibility="{Binding FftShowCorrected, Converter={StaticResource BoolToVis}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="90"/>
+                                                    <ColumnDefinition Width="70"/>
+                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding PeriodSeconds, StringFormat='{}{0:F0} s'}" Foreground="#64B5F6" FontWeight="Bold" FontSize="11"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding AmplitudeArcsec, StringFormat='{}{0:F3}&quot;'}" Foreground="#FFEB3B" FontSize="11"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Confidence, StringFormat='{}{0:P0}'}" Foreground="#80CBC4" FontSize="11"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding Interpretation}" Foreground="#AAAACC" FontSize="10" TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <!-- Pics Corrections Removed -->
+                                <ItemsControl Margin="8,0"
+                                    ItemsSource="{Binding CurrentSession.FftRaUncorrected.SignificantPeaks}"
+                                    Visibility="{Binding FftShowUncorrected, Converter={StaticResource BoolToVis}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="90"/>
+                                                    <ColumnDefinition Width="70"/>
+                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding PeriodSeconds, StringFormat='{}{0:F0} s'}" Foreground="#FFB74D" FontWeight="Bold" FontSize="11"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding AmplitudeArcsec, StringFormat='{}{0:F3}&quot;'}" Foreground="#FFEB3B" FontSize="11"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Confidence, StringFormat='{}{0:P0}'}" Foreground="#80CBC4" FontSize="11"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding Interpretation}" Foreground="#AAAACC" FontSize="10" TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Expander>
+                    </Grid>
+
+                    <!-- ── DEC ── -->
+                    <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Drift-corrected -->
+                        <Grid Visibility="{Binding FftShowCorrected, Converter={StaticResource BoolToVis}}">
+                            <oxy:PlotView Model="{Binding FftDecPlot}" Background="#1E1E2E" Margin="4"
+                                          x:Name="FftDecPlotView"/>
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
+                                    Padding="6,2" FontSize="10" Background="#333355" Foreground="#AAAACC"
+                                    BorderThickness="1" BorderBrush="#555577" Cursor="Hand"
+                                    Click="ResetFftDecZoom_Click"><TextBlock Text="⟳ Reset"/></Button>
+                        </Grid>
+                        <!-- Corrections Removed -->
+                        <Grid Visibility="{Binding FftShowUncorrected, Converter={StaticResource BoolToVis}}">
+                            <oxy:PlotView Model="{Binding FftDecUncorrectedPlot}" Background="#1E1E2E" Margin="4"
+                                          x:Name="FftDecUncorrPlotView"/>
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
+                                    Padding="6,2" FontSize="10" Background="#333355" Foreground="#AAAACC"
+                                    BorderThickness="1" BorderBrush="#555577" Cursor="Hand"
+                                    Click="ResetFftDecUncorrZoom_Click"><TextBlock Text="⟳ Reset"/></Button>
+                        </Grid>
+
+                        <!-- Tableau des pics DEC -->
+                        <Expander Grid.Row="1" Background="#1E1E30" Foreground="White" IsExpanded="True">
+                            <Expander.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Detected DEC peaks — " FontSize="11" Foreground="#AAAACC"/>
+                                    <TextBlock Text="Drift-corrected" FontSize="11" Foreground="#64B5F6"
+                                               Visibility="{Binding FftShowCorrected, Converter={StaticResource BoolToVis}}"/>
+                                    <TextBlock Text="Corrections Removed" FontSize="11" Foreground="#FFB74D"
+                                               Visibility="{Binding FftShowUncorrected, Converter={StaticResource BoolToVis}}"/>
+                                </StackPanel>
+                            </Expander.Header>
+                            <StackPanel>
+                                <Grid Margin="8,4,8,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="60"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Period" Foreground="#666688" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" Text="Amplitude" Foreground="#666688" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="2" Text="Confidence" Foreground="#666688" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="3" Text="Interprétation" Foreground="#666688" FontSize="10" FontWeight="Bold"/>
+                                </Grid>
+                                <ItemsControl Margin="8,0"
+                                    ItemsSource="{Binding CurrentSession.FftDec.SignificantPeaks}"
+                                    Visibility="{Binding FftShowCorrected, Converter={StaticResource BoolToVis}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="90"/>
+                                                    <ColumnDefinition Width="70"/>
+                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding PeriodSeconds, StringFormat='{}{0:F0} s'}" Foreground="#FFB74D" FontWeight="Bold" FontSize="11"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding AmplitudeArcsec, StringFormat='{}{0:F3}&quot;'}" Foreground="#FFEB3B" FontSize="11"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Confidence, StringFormat='{}{0:P0}'}" Foreground="#80CBC4" FontSize="11"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding Interpretation}" Foreground="#AAAACC" FontSize="10" TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <ItemsControl Margin="8,0"
+                                    ItemsSource="{Binding CurrentSession.FftDecUncorrected.SignificantPeaks}"
+                                    Visibility="{Binding FftShowUncorrected, Converter={StaticResource BoolToVis}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="90"/>
+                                                    <ColumnDefinition Width="70"/>
+                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding PeriodSeconds, StringFormat='{}{0:F0} s'}" Foreground="#FFB74D" FontWeight="Bold" FontSize="11"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding AmplitudeArcsec, StringFormat='{}{0:F3}&quot;'}" Foreground="#FFEB3B" FontSize="11"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Confidence, StringFormat='{}{0:P0}'}" Foreground="#80CBC4" FontSize="11"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding Interpretation}" Foreground="#AAAACC" FontSize="10" TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Expander>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- ── Advice ──────────────────────────────────────────────── -->
+            <TabItem Header="Advice" Background="#252535" Foreground="White">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="8">
+                        <ItemsControl ItemsSource="{Binding Advice}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,4" Padding="12,10" CornerRadius="6" BorderThickness="1">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background"  Value="#1A1A2E"/>
+                                                <Setter Property="BorderBrush" Value="#555577"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Priority}" Value="Critical">
+                                                        <Setter Property="Background"  Value="#3A0808"/>
+                                                        <Setter Property="BorderBrush" Value="#F44336"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Priority}" Value="High">
+                                                        <Setter Property="Background"  Value="#2E1008"/>
+                                                        <Setter Property="BorderBrush" Value="#FF5722"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Priority}" Value="Medium">
+                                                        <Setter Property="Background"  Value="#2E2008"/>
+                                                        <Setter Property="BorderBrush" Value="#FFC107"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Priority}" Value="Low">
+                                                        <Setter Property="Background"  Value="#08152E"/>
+                                                        <Setter Property="BorderBrush" Value="#64B5F6"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel>
+                                            <!-- En-tête : badge priorité + icône + titre + contexte -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                <Border CornerRadius="3" Padding="5,2" Margin="0,0,8,0">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="#555577"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Priority}" Value="Critical"><Setter Property="Background" Value="#F44336"/></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Priority}" Value="High">    <Setter Property="Background" Value="#FF5722"/></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Priority}" Value="Medium">  <Setter Property="Background" Value="#F9A825"/></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Priority}" Value="Low">     <Setter Property="Background" Value="#1565C0"/></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Priority}" Value="Info">    <Setter Property="Background" Value="#37474F"/></DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding PriorityLabel}" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding Icon}" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <TextBlock Text="{Binding Context}" Foreground="#FFEB3B" FontSize="11" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <!-- Détail -->
+                                            <TextBlock Text="{Binding Detail}" Foreground="#CCCCDD" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,6"/>
+                                            <!-- Action recommandée -->
+                                            <Border Background="#0D2010" CornerRadius="4" Padding="10,6">
+                                                <StackPanel>
+                                                    <TextBlock Text="→ Recommended action" Foreground="#81C784" FontWeight="Bold" FontSize="10" Margin="0,0,0,3"/>
+                                                    <TextBlock Text="{Binding Action}" Foreground="#A5D6A7" TextWrapping="Wrap" FontSize="11"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ══ Characteristics du guidage ═══════════════════════════ -->
+            <TabItem Header="Characteristics" Background="#252535" Foreground="White">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
+                        <TextBlock Text="Characteristics de la session" FontSize="15" FontWeight="Bold"
+                                   Foreground="White" Margin="0,0,0,10"/>
+
+                        <!-- ══════════════════════════════════════════════════════ -->
+                        <!-- RÉSUMÉ DU GUIDAGE                                     -->
+                        <!-- ══════════════════════════════════════════════════════ -->
+                        <Border Background="#1A1A2E" CornerRadius="8" Padding="12,10" Margin="0,0,0,12"
+                                BorderBrush="#2E75B6" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="Guiding summary" Foreground="#64B5F6" FontWeight="Bold"
+                                           FontSize="13" Margin="0,0,0,10"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Colonne RMS -->
+                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                        <TextBlock Text="Precision" Foreground="#AAAACC" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="RMS RA"    Foreground="#AAAACC" FontSize="11"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SummaryRaRms}"    Foreground="#64B5F6" FontSize="14" FontWeight="Bold"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="RMS DEC"   Foreground="#AAAACC" FontSize="11"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SummaryDecRms}"   Foreground="#FFB74D" FontSize="14" FontWeight="Bold"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Total RMS" Foreground="#AAAACC" FontSize="11"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SummaryTotalRms}" Foreground="#FFFFFF" FontSize="14" FontWeight="Bold"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Frames"    Foreground="#AAAACC" FontSize="11"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SummaryFrames}"   Foreground="#CE93D8" FontSize="11"/>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- Colonne Dérives -->
+                                    <StackPanel Grid.Column="1" Margin="8,0">
+                                        <TextBlock Text="Drifts (reconstructed curve)" Foreground="#AAAACC" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="RA Drift"    Foreground="#AAAACC" FontSize="11"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SummaryRaDrift}"    Foreground="#80CBC4" FontSize="13" FontWeight="Bold"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Confidence"    Foreground="#AAAACC" FontSize="11"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SummaryRaDriftConf}" FontSize="11">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#888"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SummaryRaDriftConf}" Value="High"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaDriftConf}" Value="Medium"><Setter Property="Foreground" Value="#FFC107"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaDriftConf}" Value="Low"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="DEC Drift"   Foreground="#AAAACC" FontSize="11" Margin="0,6,0,0"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SummaryDecDrift}"   Foreground="#80CBC4" FontSize="13" FontWeight="Bold" Margin="0,6,0,0"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Confidence"    Foreground="#AAAACC" FontSize="11"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SummaryDecDriftConf}" FontSize="11">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#888"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SummaryDecDriftConf}" Value="High"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecDriftConf}" Value="Medium"><Setter Property="Foreground" Value="#FFC107"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecDriftConf}" Value="Low"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Quality"      Foreground="#AAAACC" FontSize="11" Margin="0,6,0,0"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SummaryQuality}"     Foreground="#FFEB3B" FontSize="11" FontWeight="Bold" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- Colonne Amplitude monture -->
+                                    <StackPanel Grid.Column="2" Margin="8,0,0,0">
+                                        <TextBlock Text="Mount amplitude (±)" Foreground="#AAAACC" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="RA amplitude"  Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SummaryMountRaAmplitude}"  Foreground="#6495ED" FontSize="13" FontWeight="Bold"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="DEC amplitude" Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SummaryMountDecAmplitude}" Foreground="#CE93D8" FontSize="13" FontWeight="Bold"/>
+                                        </Grid>
+                                        <TextBlock Text="real oscillations after linear drift subtraction" Foreground="#555577" FontSize="9" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Advanced statistical analysis → voir onglet dédié -->
+
+                        <!-- Détails équipement et config PHD2 -->
+                        <StackPanel DataContext="{Binding CurrentSession.SessionInfo}">
+
+                        <!-- ── Equipment ──────────────────────────────────────── -->
+                        <TextBlock Text="Equipment" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,6,0,4"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Profile" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding EquipmentProfilee}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Mount" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MountName}" Foreground="White" FontSize="11" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Camera" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CameraName}" Foreground="White" FontSize="11" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Camera gain" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding CameraGain}" Foreground="#FFEB3B" FontSize="11"/>
+                            </Grid>
+                            <Grid Grid.Column="2">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Sensor size" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CameraFullSize}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Pixel" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CameraPixelSizeUm, StringFormat='{}{0:F1} µm'}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Exposure" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ExposureMs, StringFormat='{}{0} ms'}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Optics" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Foreground="White" FontSize="11">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0} &quot;/px  f={1}mm  ×{2}">
+                                            <Binding Path="PixelScaleArcSecPx"/><Binding Path="FocalLengthMm"/><Binding Path="Binning"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </Grid>
+                        </Grid>
+
+                        <!-- ── Dither / Recherche étoile ───────────────────────── -->
+                        <TextBlock Text="Dither &amp; Star search" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,10,0,4"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Dither" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Foreground="White" FontSize="11">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0}  ×{1:F2}">
+                                            <Binding Path="DitherAxes"/><Binding Path="DitherScale"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Noise red." Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding NoiseReduction}" Foreground="White" FontSize="11"/>
+                            </Grid>
+                            <Grid Grid.Column="2">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Search region" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SearchRegionPx, StringFormat='{}{0} px'}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Multi-star" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MultiStarListSize, StringFormat='{}liste {0}'}" Foreground="White" FontSize="11"/>
+                            </Grid>
+                        </Grid>
+
+                        <!-- ── Guiding algorithms ───────────────────────────── -->
+                        <TextBlock Text="Guiding algorithms" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,10,0,4"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <!-- RA -->
+                            <Border Grid.Column="0" Background="#1A1A2E" CornerRadius="5" Padding="8,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="115"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Text="RA (X)" Foreground="#64B5F6" FontWeight="Bold" FontSize="11" Margin="0,0,0,4"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Algorithm" Foreground="#AAAACC" FontSize="11"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RaAlgorithm}" Foreground="White" FontSize="11" TextWrapping="Wrap"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Control gain" Foreground="#AAAACC" FontSize="11"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding RaControlGain, StringFormat='{}{0:F3}'}" Foreground="#FFEB3B" FontSize="11"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Prediction gain" Foreground="#AAAACC" FontSize="11"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding RaPredictionGain, StringFormat='{}{0:F3}'}" Foreground="White" FontSize="11"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Min move" Foreground="#AAAACC" FontSize="11"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding RaMinMove, StringFormat='{}{0:F3} &quot;'}" Foreground="White" FontSize="11"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="PEC period" Foreground="#AAAACC" FontSize="11"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding PecPeriodLength, StringFormat='{}{0:F0} s'}" Foreground="#80CBC4" FontSize="11"/>
+                                </Grid>
+                            </Border>
+                            <!-- DEC -->
+                            <Border Grid.Column="2" Background="#1A1A2E" CornerRadius="5" Padding="8,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="115"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Text="DEC (Y)" Foreground="#FFB74D" FontWeight="Bold" FontSize="11" Margin="0,0,0,4"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Algorithm" Foreground="#AAAACC" FontSize="11"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DecAlgorithm}" Foreground="White" FontSize="11"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Aggressiveness" Foreground="#AAAACC" FontSize="11"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DecAggression, StringFormat='{}{0:F0}%'}" Foreground="#FFEB3B" FontSize="11"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="FastSwitch" Foreground="#AAAACC" FontSize="11"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding DecFastSwitch}" Foreground="White" FontSize="11"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Min move" Foreground="#AAAACC" FontSize="11"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding DecMinMove, StringFormat='{}{0:F3} &quot;'}" Foreground="White" FontSize="11"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Mode DEC" Foreground="#AAAACC" FontSize="11"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding DecGuideMode}" Foreground="White" FontSize="11"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <!-- ── Guiding parameters ────────────────────────────── -->
+                        <TextBlock Text="Guiding parameters" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,10,0,4"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="115"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Max RA duration" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding MaxRaDuration, StringFormat='{}{0} ms'}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Max DEC duration" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MaxDecDuration, StringFormat='{}{0} ms'}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Backlash comp." Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Foreground="White" FontSize="11">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0}  {1} ms">
+                                            <Binding Path="BacklashCompEnabled"/><Binding Path="BacklashPulseMs"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </Grid>
+                            <Grid Grid.Column="2">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="115"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="RA speed" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RaGuideSpeedArcsecS, StringFormat='{}{0:F1} &quot;/s'}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="DEC speed" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DecGuideSpeedArcsecS, StringFormat='{}{0:F1} &quot;/s'}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Cal Dec / Issue" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Foreground="White" FontSize="11">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0:F1}°  {1}">
+                                            <Binding Path="CalDec"/><Binding Path="LastCalIssue"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </Grid>
+                        </Grid>
+
+                        <!-- ── Sky position ─────────────────────────────────── -->
+                        <TextBlock Text="Sky position" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,10,0,4"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="115"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="RA / DEC" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Foreground="White" FontSize="11">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0:F2} h  {1:F1}°">
+                                            <Binding Path="RaHours"/><Binding Path="DecDeg"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Hour angle" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Foreground="White" FontSize="11">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0:F2} h  côté {1}">
+                                            <Binding Path="HourAngle"/><Binding Path="PierSide"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Alt / Az" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Foreground="White" FontSize="11">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}Alt {0:F1}°  Az {1:F1}°">
+                                            <Binding Path="AltDeg"/><Binding Path="AzDeg"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </Grid>
+                            <Grid Grid.Column="2">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="115"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Star HFD" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding StarHfd, StringFormat='{}{0:F2} px'}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Lock position" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Foreground="White" FontSize="11">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}({0:F1}, {1:F1})">
+                                            <Binding Path="LockPositionX"/><Binding Path="LockPositionY"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Cal Timestamp" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CalTimestamp}" Foreground="#888888" FontSize="10" TextWrapping="Wrap"/>
+                            </Grid>
+                        </Grid>
+
+                        <!-- ── Taux normalisés &amp; angles monture ──────────────── -->
+                        <TextBlock Text="Taux normalisés &amp; Mount" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,10,0,4"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="115"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Norm. RA" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding NormRatesRa}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Norm. DEC" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding NormRatesDec}" Foreground="White" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Ortho. err." Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OrthoErrorDeg, StringFormat='{}{0:F1}°'}" Foreground="White" FontSize="11"/>
+                            </Grid>
+                            <Grid Grid.Column="2">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="115"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="xAngle / xRate" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Foreground="White" FontSize="11">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0:F1}°  {1:F3} px/s">
+                                            <Binding Path="MountXAngle"/><Binding Path="MountXRate"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="yAngle / yRate" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Foreground="White" FontSize="11">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0:F1}°  {1:F3} px/s">
+                                            <Binding Path="MountYAngle"/><Binding Path="MountYRate"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Parity" Foreground="#AAAACC" FontSize="11"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding MountParity}" Foreground="White" FontSize="11"/>
+                            </Grid>
+                        </Grid>
+
+                        </StackPanel>  <!-- fin DataContext SessionInfo -->
+                        </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ══ Calibration ════════════════════════════════════════════ -->
+            <TabItem Header="Calibration" Background="#252535" Foreground="White">
+                <Grid>
+                    <!-- Message si pas de calibration -->
+                    <TextBlock Text="No calibration associated with this session."
+                               Foreground="#888" FontStyle="Italic"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="13">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentSession.Calibration}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer.Style>
+                            <Style TargetType="ScrollViewer">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentSession.Calibration}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ScrollViewer.Style>
+
+                        <StackPanel Margin="12" DataContext="{Binding CurrentSession.Calibration}">
+
+                            <!-- En-tête -->
+                            <TextBlock Text="PHD2 Calibration" FontSize="15" FontWeight="Bold" Foreground="White" Margin="0,0,0,4"/>
+                            <TextBlock Foreground="#AAAACC" FontSize="11" Margin="0,0,0,10">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}Le {0:dd/MM/yyyy à HH:mm:ss}  —  {1}">
+                                        <Binding Path="StartTime"/><Binding Path="MountName"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+
+                            <!-- ── Résultats RA / DEC ── -->
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Background="#1A2A3A" CornerRadius="6" Padding="10" Margin="0,0,6,0">
+                                    <StackPanel>
+                                        <TextBlock Text="RA AXIS" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="22"/><RowDefinition Height="22"/><RowDefinition Height="22"/></Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Angle" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RaAngleDeg, StringFormat={}{0:F1}°}" Foreground="#FFB74D" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Speed" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RaRatePxSec, StringFormat={}{0:F3} px/s}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Parity" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding RaParity}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="1" Background="#1A2A3A" CornerRadius="6" Padding="10" Margin="6,0,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="DEC AXIS" Foreground="#FFB74D" FontWeight="Bold" FontSize="12" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="22"/><RowDefinition Height="22"/><RowDefinition Height="22"/></Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Angle" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DecAngleDeg, StringFormat={}{0:F1}°}" Foreground="#FFB74D" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Speed" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DecRatePxSec, StringFormat={}{0:F3} px/s}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Parity" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DecParity}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <!-- ── Graphique ── -->
+                            <TextBlock Text="Calibration curve" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,4,0,6"/>
+                            <oxy:PlotView Model="{Binding DataContext.CalibrationPlot,
+                                          RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                          x:Name="CalibrationPlotView"
+                                          Background="#1E1E2E" Height="300" Margin="0,0,0,10"/>
+
+                            <!-- ── Parameters sur 2 colonnes ── -->
+                            <TextBlock Text="Parameters" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,4,0,6"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Colonne gauche -->
+                                <StackPanel Grid.Column="0" Background="#1A1A2E" >
+                                    <Border Background="#252540" CornerRadius="4" Padding="8,6" Margin="0,0,0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Cal step" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding CalibrationStepMs, StringFormat={}{0} ms}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#1E1E35" CornerRadius="4" Padding="8,6" Margin="0,0,0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Target distance" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding CalibrationDistancePx, StringFormat={}{0:F0} px}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#252540" CornerRadius="4" Padding="8,6" Margin="0,0,0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Speed guide RA" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Foreground="White" FontSize="11" VerticalAlignment="Center">
+                                                <TextBlock.Text><Binding Path="RaGuideSpeedArcsecS" StringFormat='{}{0:F1}"/s'/></TextBlock.Text>
+                                            </TextBlock>
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#1E1E35" CornerRadius="4" Padding="8,6" Margin="0,0,0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Speed guide DEC" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Foreground="White" FontSize="11" VerticalAlignment="Center">
+                                                <TextBlock.Text><Binding Path="DecGuideSpeedArcsecS" StringFormat='{}{0:F1}"/s'/></TextBlock.Text>
+                                            </TextBlock>
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#252540" CornerRadius="4" Padding="8,6" Margin="0,0,0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Pixel scale" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Foreground="White" FontSize="11" VerticalAlignment="Center">
+                                                <TextBlock.Text><Binding Path="PixelScaleArcSecPx" StringFormat='{}{0:F2}"/px'/></TextBlock.Text>
+                                            </TextBlock>
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#1E1E35" CornerRadius="4" Padding="8,6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Focal length" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding FocalLengthMm, StringFormat={}{0:F0} mm}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Colonne droite -->
+                                <StackPanel Grid.Column="2" Background="#1A1A2E">
+                                    <Border Background="#252540" CornerRadius="4" Padding="8,6" Margin="0,0,0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="RA" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding RaHours, StringFormat={}{0:F2} h}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#1E1E35" CornerRadius="4" Padding="8,6" Margin="0,0,0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Dec" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding DecDeg, StringFormat={}{0:F1}°}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#252540" CornerRadius="4" Padding="8,6" Margin="0,0,0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Hour angle" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding HourAngle, StringFormat={}{0:F2} h}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#1E1E35" CornerRadius="4" Padding="8,6" Margin="0,0,0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Pier side" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding PierSide}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#252540" CornerRadius="4" Padding="8,6" Margin="0,0,0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Altitude" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding AltDeg, StringFormat={}{0:F1}°}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#1E1E35" CornerRadius="4" Padding="8,6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Azimuth" Foreground="#AAAACC" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding AzDeg, StringFormat={}{0:F1}°}" Foreground="White" FontSize="11" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+
+            <!-- ── Advanced statistics ──────────────────────────── -->
+            <TabItem Header="Advanced statistics" Background="#252535" Foreground="White">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="16,12">
+                        <TextBlock Text="Advanced statistical analysis" Foreground="#64B5F6" FontWeight="Bold"
+                                   FontSize="14" Margin="0,0,0,14"/>
+                        <Border Background="#1E1E2E" CornerRadius="6" Padding="12,10" Margin="0,0,0,8">
+                            <StackPanel>
+                                <TextBlock Text="Advanced statistical analysis" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,0,0,8"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Distribution : Skewness / Kurtosis -->
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                        <TextBlock Text="Error distribution" Foreground="#AAAACC" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition Height="8"/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="RA Skewness"  Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SummaryRaSkewness}"  FontSize="11" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SummaryRaSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='⚠'}" Value="True"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='▲ strong'}" Value="True"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='▲ mod'}" Value="True"><Setter Property="Foreground" Value="#FFA726"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='▼ strong'}" Value="True"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='▼ mod'}" Value="True"><Setter Property="Foreground" Value="#FFA726"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='≈'}" Value="True"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="DEC Skewness" Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SummaryDecSkewness}" FontSize="11" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SummaryDecSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='▲ strong'}" Value="True"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='▲ mod'}" Value="True"><Setter Property="Foreground" Value="#FFA726"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='▼ strong'}" Value="True"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='▼ mod'}" Value="True"><Setter Property="Foreground" Value="#FFA726"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecSkewness, Converter={StaticResource StartsWithConverter}, ConverterParameter='≈'}" Value="True"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="RA Kurtosis"  Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SummaryRaKurtosis}"  FontSize="11" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SummaryRaKurtosis, Converter={StaticResource StartsWithConverter}, ConverterParameter='⚠'}" Value="True"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaKurtosis, Converter={StaticResource StartsWithConverter}, ConverterParameter='△'}" Value="True"><Setter Property="Foreground" Value="#FFA726"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaKurtosis, Converter={StaticResource StartsWithConverter}, ConverterParameter='✓'}" Value="True"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaKurtosis, Converter={StaticResource StartsWithConverter}, ConverterParameter='≈'}" Value="True"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="DEC Kurtosis" Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SummaryDecKurtosis}" FontSize="11" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SummaryDecKurtosis, Converter={StaticResource StartsWithConverter}, ConverterParameter='⚠'}" Value="True"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecKurtosis, Converter={StaticResource StartsWithConverter}, ConverterParameter='△'}" Value="True"><Setter Property="Foreground" Value="#FFA726"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecKurtosis, Converter={StaticResource StartsWithConverter}, ConverterParameter='✓'}" Value="True"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecKurtosis, Converter={StaticResource StartsWithConverter}, ConverterParameter='≈'}" Value="True"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                        <TextBlock Foreground="White" FontSize="9" Margin="0,6,0,0" TextWrapping="Wrap"
+                                                   Text="Skewness: asymmetry of error distribution (ideally close to 0)&#10;Kurtosis: frequency of large error peaks (ideally close to 0)"/>
+                                    </StackPanel>
+
+                                    <!-- Corrélation RA/DEC -->
+                                    <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                        <TextBlock Text="RA / DEC Correlation" Foreground="#AAAACC" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Pearson r" Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SummaryRaDecCorrelation}" FontSize="11" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SummaryRaDecCorrelation, Converter={StaticResource StartsWithConverter}, ConverterParameter='likely flexure'}" Value="True"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaDecCorrelation, Converter={StaticResource StartsWithConverter}, ConverterParameter='moderate correlation'}" Value="True"><Setter Property="Foreground" Value="#FFA726"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaDecCorrelation, Converter={StaticResource StartsWithConverter}, ConverterParameter='weak correlation'}" Value="True"><Setter Property="Foreground" Value="White"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaDecCorrelation, Converter={StaticResource StartsWithConverter}, ConverterParameter='✓'}" Value="True"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                        <TextBlock Foreground="White" FontSize="9" Margin="0,6,0,0" TextWrapping="Wrap"
+                                                   Text="A correlation &gt; 0.5 between RA and DEC indicates likely optical flexure or balance issue."/>
+                                    </StackPanel>
+
+                                    <!-- Test de stationnarité -->
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Stationarity (1st vs 2nd half)" Foreground="#AAAACC" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="RA ratio"  Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SummaryRaStability}"  FontSize="11" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SummaryRaStability, Converter={StaticResource StartsWithConverter}, ConverterParameter='strong degradation'}" Value="True"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaStability, Converter={StaticResource StartsWithConverter}, ConverterParameter='degradation detected'}" Value="True"><Setter Property="Foreground" Value="#FFA726"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaStability, Converter={StaticResource StartsWithConverter}, ConverterParameter='↑'}" Value="True"><Setter Property="Foreground" Value="White"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryRaStability, Converter={StaticResource StartsWithConverter}, ConverterParameter='✓'}" Value="True"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="DEC ratio" Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SummaryDecStability}" FontSize="11" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SummaryDecStability, Converter={StaticResource StartsWithConverter}, ConverterParameter='strong degradation'}" Value="True"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecStability, Converter={StaticResource StartsWithConverter}, ConverterParameter='degradation detected'}" Value="True"><Setter Property="Foreground" Value="#FFA726"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecStability, Converter={StaticResource StartsWithConverter}, ConverterParameter='↑'}" Value="True"><Setter Property="Foreground" Value="White"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SummaryDecStability, Converter={StaticResource StartsWithConverter}, ConverterParameter='✓'}" Value="True"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                        <TextBlock Foreground="White" FontSize="9" Margin="0,6,0,0" TextWrapping="Wrap"
+                                                   Text="2nd/1st half variance ratio. A ratio &gt; 1.5 indicates guiding degrades during the session."/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── Period vis sans fin ───────────────────── -->
+                        <Border Background="#1E1E2E" CornerRadius="6" Padding="12,10" Margin="0,0,0,8"
+                                Visibility="{Binding HasWormData, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="Worm period (periodic error)"
+                                           Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,0,0,10"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Colonne 1 : Period mesurée -->
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                        <TextBlock Text="FFT estimate" Foreground="#AAAACC" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition Height="8"/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Period" Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding WormPeriodText}"
+                                                       FontSize="11" FontWeight="Bold" Foreground="#FFD54F"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Amplitude" Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding WormAmplitudeText}"
+                                                       FontSize="11" Foreground="#FF7043"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="PHD2 PEC" Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding WormPhd2Text}"
+                                                       FontSize="11" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#AAAACC"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding WormConsistentPhd2}" Value="True">
+                                                                <Setter Property="Foreground" Value="#81C784"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Source" Foreground="White" FontSize="10"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding WormSourceSession}"
+                                                       FontSize="10" Foreground="#555577" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- Colonne 2 : Confidence score -->
+                                    <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                        <TextBlock Text="Confidence score" Foreground="#AAAACC" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+                                        <TextBlock Text="{Binding WormConfidenceText}"
+                                                   FontSize="13" FontWeight="Bold" Margin="0,0,0,6">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#AAAACC"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding WormConfidenceColor}" Value="#81C784"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding WormConfidenceColor}" Value="#FFC107"><Setter Property="Foreground" Value="#FFC107"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding WormConfidenceColor}" Value="#FF7043"><Setter Property="Foreground" Value="#FF7043"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding WormConfidenceColor}" Value="#EF5350"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <!-- Barre de progression -->
+                                        <ProgressBar Value="{Binding WormConfidencePercent}" Minimum="0" Maximum="100"
+                                                     Height="8" Margin="0,0,0,8" Width="180" HorizontalAlignment="Left"
+                                                     Background="#252540" BorderThickness="0">
+                                            <ProgressBar.Style>
+                                                <Style TargetType="ProgressBar">
+                                                    <Setter Property="Foreground" Value="#AAAACC"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding WormConfidenceColor}" Value="#81C784"><Setter Property="Foreground" Value="#81C784"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding WormConfidenceColor}" Value="#FFC107"><Setter Property="Foreground" Value="#FFC107"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding WormConfidenceColor}" Value="#FF7043"><Setter Property="Foreground" Value="#FF7043"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding WormConfidenceColor}" Value="#EF5350"><Setter Property="Foreground" Value="#EF5350"/></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ProgressBar.Style>
+                                        </ProgressBar>
+                                        <TextBlock Text="{Binding WormConfidenceDetail}"
+                                                   Foreground="#AAAACC" FontSize="10"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+
+                                    <!-- Colonne 3 : Factors -->
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Factors" Foreground="#AAAACC" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Cycles covered" Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding WormCyclesText}" FontSize="11" Foreground="#CE93D8"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Peak SNR" Foreground="White" FontSize="11"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding WormSnrText}" FontSize="11" Foreground="#80CBC4"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── Diagnostic dégradation ────────────────── -->
+                        <Border Background="#1E1E2E" CornerRadius="6" Padding="12,10" Margin="0,0,0,8"
+                                Visibility="{Binding HasAltitudeData, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <!-- En-tête avec latitude et fenêtre -->
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Degradation analysis — RMS vs Altitude &amp; Meridian"
+                                                   Foreground="#64B5F6" FontWeight="Bold" FontSize="12"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                            <TextBlock Text="{Binding AltitudeLatitudeText}" Foreground="#AAAACC" FontSize="10"/>
+                                            <TextBlock Text="   |   " Foreground="#444455" FontSize="10"/>
+                                            <TextBlock Text="Window: " Foreground="#AAAACC" FontSize="10"/>
+                                            <TextBlock Text="{Binding AltitudeWindowLabel}" FontSize="10">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#AAAACC"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding AltitudeWindowFromWorm}" Value="True">
+                                                                <Setter Property="Foreground" Value="#81C784"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Foreground="#FFC107" FontSize="10" VerticalAlignment="Top"
+                                               Text="🔄 Meridian flip detected"
+                                               Visibility="{Binding AltitudeMeridianFlip, Converter={StaticResource BoolToVis}}"/>
+                                </Grid>
+
+                                <!-- Badge diagnostic principal -->
+                                <Border CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#1A2A1A"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DegradationColor}" Value="#FF7043"><Setter Property="Background" Value="#2A1A10"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding DegradationColor}" Value="#FFC107"><Setter Property="Background" Value="#2A2010"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding DegradationColor}" Value="#64B5F6"><Setter Property="Background" Value="#101828"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding DegradationColor}" Value="#CE93D8"><Setter Property="Background" Value="#1E1028"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding DegradationColor}" Value="#AAAACC"><Setter Property="Background" Value="#252535"/></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                            <TextBlock Text="{Binding DegradationIcon}" FontSize="14" Margin="0,0,8,0"/>
+                                            <TextBlock Text="{Binding DegradationMain}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding DegradationColor}" Value="#FF7043"><Setter Property="Foreground" Value="#FFAB91"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding DegradationColor}" Value="#FFC107"><Setter Property="Foreground" Value="#FFE082"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding DegradationColor}" Value="#64B5F6"><Setter Property="Foreground" Value="#90CAF9"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding DegradationColor}" Value="#81C784"><Setter Property="Foreground" Value="#A5D6A7"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding DegradationColor}" Value="#CE93D8"><Setter Property="Foreground" Value="#CE93D8"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding DegradationDetail}" Foreground="#AAAACC" FontSize="10"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Métriques clés -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                        <TextBlock Text="Alt/RMS Correlation" Foreground="#AAAACC" FontSize="9" Margin="0,0,0,2"/>
+                                        <TextBlock Text="{Binding DegradationPearsonText}" Foreground="White" FontSize="12" FontWeight="Bold"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                        <TextBlock Text="Trend" Foreground="#AAAACC" FontSize="9" Margin="0,0,0,2"/>
+                                        <TextBlock Text="{Binding DegradationTrendText}" Foreground="#CE93D8" FontSize="12" FontWeight="Bold"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Margin="0,0,8,0">
+                                        <TextBlock Text="Mean West RMS" Foreground="#AAAACC" FontSize="9" Margin="0,0,0,2"/>
+                                        <TextBlock Text="{Binding DegradationWestText}" Foreground="#64B5F6" FontSize="12" FontWeight="Bold"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3" Margin="0,0,8,0"
+                                                Visibility="{Binding DegradationHasFlipData, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="Mean East RMS" Foreground="#AAAACC" FontSize="9" Margin="0,0,0,2"/>
+                                        <TextBlock Text="{Binding DegradationEastText}" Foreground="#FFB74D" FontSize="12" FontWeight="Bold"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Scatter plot RMS vs Alt -->
+                                <TextBlock Text="RMS vs Altitude (⬤ Ouest, ▲ Est)" Foreground="#AAAACC" FontSize="10" Margin="0,0,0,4"/>
+                                <oxy:PlotView x:Name="RmsVsAltitudePlotView"
+                                              Model="{Binding RmsVsAltitudePlot}" Height="240"
+                                              Background="Transparent" Foreground="White"
+                                              MouseMove="PlotView_MouseMove"
+                                              MouseLeave="PlotView_MouseLeave"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── RMS glissant + altitude — nuit complète ── -->
+                        <Border Background="#1E1E2E" CornerRadius="6" Padding="12,10" Margin="0,0,0,8"
+                                Visibility="{Binding HasAltitudeData, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="Sliding RMS and altitude — full night"
+                                           Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,0,0,4"/>
+                                <TextBlock Foreground="#AAAACC" FontSize="10" Margin="0,0,0,8"
+                                           Text="{Binding AltitudeWindowLabel}"/>
+                                <oxy:PlotView x:Name="SlidingRmsPlotView"
+                                              Model="{Binding SlidingRmsPlot}" Height="280"
+                                              Background="Transparent" Foreground="White"
+                                              MouseMove="PlotView_MouseMove"
+                                              MouseLeave="PlotView_MouseLeave"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+			<!-- ── Polar Alignment ──────────────────────────────────────────────────── -->
+            <TabItem Header="Polar Alignment" Background="#252535" Foreground="White">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#1E1E2E">
+                    <StackPanel Margin="12,10">
+
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <!-- PARAMÈTRES UTILISATEUR                                       -->
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <Border Background="#252535" CornerRadius="6" Padding="14,10" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Latitude du site -->
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="Site latitude (°N)"
+                                            Foreground="#AAAACC" FontSize="10" Margin="0,0,0,3"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0"
+                                                Text="{Binding PolarLatitudeDeg, StringFormat=F1, UpdateSourceTrigger=LostFocus}"
+                                                Background="#1E1E2E" Foreground="White"
+                                                BorderBrush="#3A3A5E" Padding="6,4"
+                                                FontSize="13" FontWeight="Bold"
+                                                ToolTip="Your observation site latitude in degrees North"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding PolarLatitudeDisplay}"
+                                                Foreground="#6A9A6A" FontSize="10"
+                                                VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Screw sensitivity (arcmin/turn) -->
+                                <StackPanel Grid.Column="1" Margin="0,0,16,0">
+                                    <TextBlock Text="Screw sensitivity (arcmin/turn)"
+                                            Foreground="#AAAACC" FontSize="10" Margin="0,0,0,3"/>
+                                    <TextBox Text="{Binding PolarArcminPerTurn, StringFormat=F0, UpdateSourceTrigger=LostFocus}"
+                                            Background="#1E1E2E" Foreground="White"
+                                            BorderBrush="#3A3A5E" Padding="6,4"
+                                            FontSize="13" FontWeight="Bold"
+                                            ToolTip="Arcminutes of correction per full screw turn (azimuth and altitude). Typically 30 arcmin/turn."/>
+                                </StackPanel>
+
+                                <!-- Bouton recalcul -->
+                                <Button Grid.Column="2"
+                                        Command="{Binding RefreshPolarAlignmentCommand}"
+                                        Click="RefreshPolarAlignment_Click"
+                                        Background="#3A7BD5" Foreground="White"
+                                        Padding="14,8" BorderThickness="0"
+                                        VerticalAlignment="Bottom"
+                                        ToolTip="Recalculate with updated parameters">
+                                    <TextBlock Text="⟳ Recalculate"/>
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <!-- ERREUR DE CALCUL (si insuffisant)                           -->
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <Border Background="#2A1A1A" CornerRadius="6" Padding="14,10" Margin="0,0,0,10"
+                                Visibility="{Binding HasPolarError, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⚠  " Foreground="#FFC107" FontSize="14" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding PolarErrorText}"
+                                        Foreground="#EF9A9A" FontSize="12"
+                                        TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <!-- RÉSULTAT PRINCIPAL                                           -->
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <Border Background="#252535" CornerRadius="6" Padding="14,12" Margin="0,0,0,10"
+                                Visibility="{Binding HasPolarResult, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+
+                                <TextBlock Text="Polar alignment error"
+                                        Foreground="#64B5F6" FontWeight="Bold" FontSize="13" Margin="0,0,0,10"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Azimuth -->
+                                    <Border Grid.Column="0" Margin="0,0,8,0"
+                                            Background="#1E1E2E" CornerRadius="6" Padding="12,10">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="AZIMUTH" Foreground="#AAAACC"
+                                                    FontSize="10" FontWeight="Bold"
+                                                    HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                            <TextBlock Text="{Binding PolarErrAzText}"
+                                                    Foreground="{Binding PolarErrAzColor}"
+                                                    FontSize="22" FontWeight="Bold"
+                                                    HorizontalAlignment="Center"/>
+                                            <TextBlock Text="{Binding PolarAzDirectionText}"
+                                                    Foreground="#AAAACC" FontSize="11"
+                                                    HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                            <Separator Background="#3A3A5E" Margin="0,6,0,6"/>
+                                            <TextBlock Text="{Binding PolarAzTurnsText}"
+                                                    Foreground="#FFD54F" FontSize="11"
+                                                    HorizontalAlignment="Center"
+                                                    ToolTip="Azimuth screw turns to correct"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Altitude -->
+                                    <Border Grid.Column="1" Margin="0,0,8,0"
+                                            Background="#1E1E2E" CornerRadius="6" Padding="12,10">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="ALTITUDE" Foreground="#AAAACC"
+                                                    FontSize="10" FontWeight="Bold"
+                                                    HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                            <TextBlock Text="{Binding PolarErrAltText}"
+                                                    Foreground="{Binding PolarErrAltColor}"
+                                                    FontSize="22" FontWeight="Bold"
+                                                    HorizontalAlignment="Center"/>
+                                            <TextBlock Text="{Binding PolarAltDirectionText}"
+                                                    Foreground="#AAAACC" FontSize="11"
+                                                    HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                            <Separator Background="#3A3A5E" Margin="0,6,0,6"/>
+                                            <TextBlock Text="{Binding PolarAltTurnsText}"
+                                                    Foreground="#FFD54F" FontSize="11"
+                                                    HorizontalAlignment="Center"
+                                                    ToolTip="Altitude screw turns to correct"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Erreur totale + qualité -->
+                                    <Border Grid.Column="2"
+                                            Background="#1E1E2E" CornerRadius="6" Padding="12,10">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="TOTAL" Foreground="#AAAACC"
+                                                    FontSize="10" FontWeight="Bold"
+                                                    HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding PolarQualityIcon}"
+                                                        Foreground="{Binding PolarQualityColor}"
+                                                        FontSize="18" FontWeight="Bold"
+                                                        VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <TextBlock Text="{Binding PolarTotalText}"
+                                                        Foreground="{Binding PolarTotalColor}"
+                                                        FontSize="22" FontWeight="Bold"/>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding PolarQualityLabel}"
+                                                    Foreground="{Binding PolarQualityColor}"
+                                                    FontSize="12" FontWeight="Bold"
+                                                    HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                            <Separator Background="#3A3A5E" Margin="0,6,0,6"/>
+                                            <TextBlock Text="{Binding PolarSessionsText}"
+                                                    Foreground="#AAAACC" FontSize="10"
+                                                    HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <!-- QUALITY DU CALCUL (conditionnement + résidu)                -->
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <Border Background="#252535" CornerRadius="6" Padding="14,10" Margin="0,0,0,10"
+                                Visibility="{Binding HasPolarResult, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Conditionnement -->
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Matrix conditioning"
+                                            Foreground="#AAAACC" FontSize="10" Margin="0,0,0,3"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding PolarConditioningText}"
+                                                Foreground="{Binding PolarConditioningColor}"
+                                                FontSize="18" FontWeight="Bold" Margin="0,0,8,0"/>
+                                        <Border Background="#1E1E2E" CornerRadius="4" Padding="6,2"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding PolarConditioningLabel}"
+                                                    Foreground="{Binding PolarConditioningColor}"
+                                                    FontSize="11" FontWeight="Bold"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock FontSize="10" Foreground="#666688" Margin="0,3,0,0"
+                                            Text="&lt; 50 = excellent  |  50-300 = good  |  &gt; 300 = poor"/>
+                                </StackPanel>
+
+                                <!-- RMS résidu -->
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Model residual RMS"
+                                            Foreground="#AAAACC" FontSize="10" Margin="0,0,0,3"/>
+                                    <TextBlock Text="{Binding PolarResidualText}"
+                                            Foreground="#64B5F6" FontSize="18" FontWeight="Bold"/>
+                                    <TextBlock Text="(Dec drift unexplained by the model)"
+                                            Foreground="#666688" FontSize="10" Margin="0,3,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <!-- CONSEIL DE MESURE (si conditionnement dégradé)              -->
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <Border Background="#1E2A20" CornerRadius="6" Padding="14,10" Margin="0,0,0,10"
+                                Visibility="{Binding HasPolarAdvice, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="💡  " FontSize="14" VerticalAlignment="Top" Margin="0,1,0,0"/>
+                                <TextBlock Text="{Binding PolarAdviceText}"
+                                        Foreground="#A5D6A7" FontSize="11"
+                                        TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <!-- TABLEAU DES SESSIONS                                         -->
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <Border Background="#252535" CornerRadius="6" Padding="14,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Sessions used for calculation"
+                                        Foreground="#64B5F6" FontWeight="Bold"
+                                        FontSize="12" Margin="0,0,0,8"/>
+
+                                <DataGrid ItemsSource="{Binding PolarSessionRows}"
+                                        AutoGenerateColumns="False"
+                                        IsReadOnly="True"
+                                        Background="#1E1E2E"
+                                        Foreground="White"
+                                        BorderThickness="0"
+                                        RowBackground="#1E1E2E"
+                                        AlternatingRowBackground="#222232"
+                                        GridLinesVisibility="Horizontal"
+                                        HorizontalGridLinesBrush="#2A2A3E"
+                                        HeadersVisibility="Column"
+                                        MaxHeight="260"
+                                        FontSize="11">
+
+                                    <DataGrid.ColumnHeaderStyle>
+                                        <Style TargetType="DataGridColumnHeader">
+                                            <Setter Property="Background"   Value="#252535"/>
+                                            <Setter Property="Foreground"   Value="#AAAACC"/>
+                                            <Setter Property="FontSize"     Value="10"/>
+                                            <Setter Property="FontWeight"   Value="Bold"/>
+                                            <Setter Property="Padding"      Value="6,4"/>
+                                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                            <Setter Property="BorderBrush"  Value="#3A3A5E"/>
+                                        </Style>
+                                    </DataGrid.ColumnHeaderStyle>
+
+                                    <DataGrid.CellStyle>
+                                        <Style TargetType="DataGridCell">
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="Padding" Value="6,3"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsExcluded}" Value="True">
+                                                    <Setter Property="Foreground" Value="#666666"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.CellStyle>
+
+                                    <DataGrid.Columns>
+
+                                        <!-- N° Session -->
+                                        <DataGridTextColumn Header="S#" Width="36"
+                                            Binding="{Binding SessionIndex}"/>
+
+                                        <!-- Time de début -->
+                                        <DataGridTextColumn Header="Time" Width="68"
+                                            Binding="{Binding StartTime, StringFormat=HH:mm:ss}"/>
+
+                                        <!-- Angle Horaire (en degrés) -->
+                                        <DataGridTextColumn Header="HA (°)" Width="58"
+                                            Binding="{Binding HourAngle, StringFormat=+0.0;-0.0;0.0}"/>
+
+                                        <!-- Déclinaison -->
+                                        <DataGridTextColumn Header="Dec (°)" Width="62"
+                                            Binding="{Binding DecDeg, StringFormat=+0.0;-0.0;0.0}"/>
+
+                                        <!-- Altitude -->
+                                        <DataGridTextColumn Header="Alt (°)" Width="56"
+                                            Binding="{Binding AltDeg, StringFormat=F0}"/>
+
+                                        <!-- Drift Dec brut -->
+                                        <DataGridTextColumn Header="Mount Dec drift (&quot;/min)" Width="130"
+                                            Binding="{Binding DecDriftRaw, StringFormat=+0.000;-0.000;0.000}"/>
+
+                                        <!-- Residual -->
+                                        <DataGridTextColumn Header="Residual" Width="72"
+                                            Binding="{Binding Residual, StringFormat=+0.000;-0.000;—}"/>
+
+                                        <!-- Weight -->
+                                        <DataGridTextColumn Header="Weight" Width="50"
+                                            Binding="{Binding Weight, StringFormat=F1}"/>
+
+                                        <!-- Frames -->
+                                        <DataGridTextColumn Header="Frames" Width="60"
+                                            Binding="{Binding FrameCount}"/>
+
+                                        <!-- Status -->
+                                        <DataGridTemplateColumn Header="Status" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock VerticalAlignment="Center" Padding="6,3"
+                                                            TextWrapping="Wrap">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text"       Value="✓ Included"/>
+                                                                <Setter Property="Foreground" Value="#4CAF50"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsExcluded}" Value="True">
+                                                                        <Setter Property="Text"
+                                                                                Value="{Binding ExcludeReason}"/>
+                                                                        <Setter Property="Foreground" Value="#EF9A9A"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+
+                                    </DataGrid.Columns>
+                                </DataGrid>
+
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <!-- GUIDE THÉORIQUE — POSITIONS OPTIMALES                       -->
+                        <!-- ═══════════════════════════════════════════════════════════ -->
+                        <Border Background="#1E1E2E" CornerRadius="6" Padding="14,10" Margin="0,0,0,8">
+                            <StackPanel>
+                                <TextBlock Text="Optimal positions for measurement"
+                                        Foreground="#64B5F6" FontWeight="Bold"
+                                        FontSize="12" Margin="0,0,0,8"/>
+                                <TextBlock Foreground="#AAAACC" FontSize="10" Margin="0,0,0,6"
+                                        Text="To maximise calculation reliability (minimal conditioning):"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Grid.Column="0" Background="#252535" CornerRadius="4"
+                                            Padding="10,8" Margin="0,0,6,0">
+                                        <StackPanel>
+                                            <TextBlock Text="South Meridian" Foreground="#FFD54F"
+                                                    FontWeight="Bold" FontSize="11"/>
+                                            <TextBlock Text="HA ≈ 0h  |  Dec &lt; 30°"
+                                                    Foreground="#AAAACC" FontSize="10" Margin="0,3,0,0"/>
+                                            <TextBlock Text="→ Pure altitude sensitivity"
+                                                    Foreground="#6A9A6A" FontSize="10" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Column="1" Background="#252535" CornerRadius="4"
+                                            Padding="10,8" Margin="0,0,6,0">
+                                        <StackPanel>
+                                            <TextBlock Text="East or West" Foreground="#FFD54F"
+                                                    FontWeight="Bold" FontSize="11"/>
+                                            <TextBlock Text="HA ≈ ±3h à ±5h  |  Dec &lt; 30°"
+                                                    Foreground="#AAAACC" FontSize="10" Margin="0,3,0,0"/>
+                                            <TextBlock Text="→ Pure azimuth sensitivity"
+                                                    Foreground="#6A9A6A" FontSize="10" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Column="2" Background="#252535" CornerRadius="4"
+                                            Padding="10,8">
+                                        <StackPanel>
+                                            <TextBlock Text="Ideal combination" Foreground="#FFD54F"
+                                                    FontWeight="Bold" FontSize="11"/>
+                                            <TextBlock Text="HA = −4h + HA = +2h  |  Dec variée"
+                                                    Foreground="#AAAACC" FontSize="10" Margin="0,3,0,0"/>
+                                            <TextBlock Text="→ Azimuth + Altitude"
+                                                    Foreground="#6A9A6A" FontSize="10" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
+                                <!-- Note déclinaison 54° -->
+                                <TextBlock Foreground="#666688" FontSize="10" Margin="0,8,0,0"
+                                        TextWrapping="Wrap"
+                                        Text="⚠  High Dec (~54°, like M51): the altitude term becomes quasi-constant regardless of HA — azimuth/altitude separation is less precise. Combining with a session at Dec &lt; 30° greatly improves conditioning."/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- BARRE DE STATUT                                                 -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="4" Background="#2A2A3E" Padding="8,4">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="#AAAACC" FontSize="11"/>
+        </Border>
+    </Grid>
+</UserControl>

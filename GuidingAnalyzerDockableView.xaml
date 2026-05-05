@@ -1,0 +1,16 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:GuidingAnalyzer"
+    x:Class="GuidingAnalyzer.GuidingAnalyzerDockableView">
+
+    <!--
+        DataTemplate key MUST follow the NINA convention:
+        "<Fully Qualified DockableVM TypeName>_Dockable"
+        i.e. "GuidingAnalyzer.GuidingAnalyzerDockableVM_Dockable"
+    -->
+    <DataTemplate x:Key="GuidingAnalyzer.GuidingAnalyzerDockableVM_Dockable">
+        <local:GuidingAnalyzerView DataContext="{Binding AnalyzerVM}"/>
+    </DataTemplate>
+
+</ResourceDictionary>
