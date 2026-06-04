@@ -1,0 +1,12 @@
+﻿{
+    "Name": "GuidingAnalyzer",
+    "Description": "Advanced PHD2 guiding log analyzer: FFT, anomaly detection, polar alignment, statistics and recommendations.",
+    "Author": "JPH",
+    "Version": "1.0.0.1",
+    "AssemblyName": "NINA.Plugin.GuidingAnalyzer.dll",
+    "TypeName": "GuidingAnalyzer.GuidingAnalyzerPlugin",
+    "MinimumNINAVersion": "3.2.0.9001",
+    "Tags": [ "guiding", "PHD2", "analysis", "FFT", "polar alignment", "periodic error" ],
+    "License": "GPL-3.0",
+    "Repository": "https://github.com/jphf007/GuidingAnalyzer"
+}

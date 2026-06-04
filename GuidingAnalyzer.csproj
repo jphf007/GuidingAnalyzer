@@ -88,4 +88,10 @@
     <Message Text="Plugin deployed to $(NinaPluginDir)" Importance="high" />
   </Target>
 
+	<ItemGroup>
+		<Content Include="plugin.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+	
 </Project>
