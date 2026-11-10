@@ -9,6 +9,8 @@ A comprehensive plugin for analyzing PHD2 guiding logs with **FFT spectrum analy
 
 Version **1.0.0.5** is a locally validated release candidate; see the [audit, corrections and installation instructions](Docs/Validation-1.0.0.5.md). RA and DEC reconstruction are unchanged from 1.0.0.4; RA still matches 1.0.0.2 exactly. In Polar Alignment, enter decimal values with a **dot**, then click **Recalculate** to apply both fields. Polar estimates require known session coordinates and DEC parity.
 
+Thanks to **@ccharhut** for [PR #3](https://github.com/jphf007/GuidingAnalyzer/pull/3), which allows opening PHD2 logs while guiding is still active and ignores an unfinished final data row. See the [1.0.0.5 release notes](Docs/Release-1.0.0.5.md).
+
 Build and test without changing your NINA installation:
 
 ```powershell

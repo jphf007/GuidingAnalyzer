@@ -10,6 +10,8 @@ L'identifiant permanent du plugin reste `A1B2C3D4-E5F6-7890-ABCD-EF1234567890`, 
 
 ## Défauts reproduits et corrigés
 
+- Contribution de **@ccharhut**, [PR #3](https://github.com/jphf007/GuidingAnalyzer/pull/3) : lecture d'un log encore ouvert en écriture par PHD2 via partage ReadWrite/Delete, avec abandon de la dernière ligne de données si elle est encore partiellement écrite. La proposition et son test ont été fusionnés, puis vérifiés avec les correctifs locaux.
+
 - Lecture du log : une calibration échouée ou un en-tête tronqué pouvait absorber la session suivante ; les lignes absentes, NaN ou invalides ne doivent pas devenir des mesures valides à zéro. Les dates de début utilisent un format invariant.
 - Calibration : les angles négatifs, présents dans le log utilisateur (-179.5° et -88.2°), étaient affichés à zéro. Les angles sont maintenant lus avec leur signe, dans la calibration et dans l'en-tête de session.
 - Statistiques : exclusion des dithers et mesures non finies au niveau du service ; cohérence entre la note et son descriptif ; même segment continu pour la dérive calculée et affichée.
@@ -24,7 +26,7 @@ L'identifiant permanent du plugin reste `A1B2C3D4-E5F6-7890-ABCD-EF1234567890`, 
 
 ## Validation
 
-- Restauration des dépendances et compilation Release ; 53 tests portables réussis, avec les tests WPF sous culture française et les simulations indépendantes de rotation 3D.
+- Restauration des dépendances et compilation Release ; 54 tests portables réussis, avec le test de log actif de @ccharhut, les tests WPF sous culture française et les simulations indépendantes de rotation 3D.
 - Six tests ajoutés ont d'abord échoué sur la version de départ, confirmant les défauts de statistiques, inversions DEC, période sur bruit, latitude sud, fenêtres RMS et lecture de sessions tronquées ; ils passent après correction. D'autres tests couvrent les défauts trouvés ensuite.
 - Rejeu supplémentaire du log fourni : 16 sessions, 7 659 images. Comparaison exacte de chaque point reconstruit RA et DEC avec 1.0.0.4 ; continuité des raccordements DEC après dithering.
 - Exécution du véritable contrôle WPF et de son template N.I.N.A. : sept onglets rendus et inspectés, zéro erreur de liaison WPF sur le scénario réel ; exports CSV et JSON relus.
@@ -40,7 +42,7 @@ Les tests WPF ne remplacent pas le chargement du candidat dans une instance N.I.
 
 Une courbe sans guidage demeure une estimation fondée sur les distances et la calibration enregistrées. Les tests ne garantissent pas les déplacements effectifs d'une monture avec backlash, flexion ou glissement. Les attributions mécaniques des pics et les scores de confiance sont des heuristiques, pas des probabilités calibrées. Le calcul polaire doit être confronté à une mesure de dérive indépendante avant d'en suivre les directions de réglage.
 
-Le dossier de travail actuel ne contient plus de métadonnées `.git` : les différences ont été contrôlées contre une copie initiale et les références de versions distribuées. Le ZIP de sources est fourni pour réintégration dans le dépôt, sans recréer ou publier son historique automatiquement.
+Le répertoire `.git` a été restauré depuis le dépôt GitHub, sans remplacer les sources locales. Les correctifs d'audit sont enregistrés et la contribution #3 est intégrée dans l'historique avec son attribution. La synchronisation compare les commits et les arbres Git local/distant ; les fichiers de travail, archives et preuves locales ignorés ne font pas partie du dépôt.
 
 Le service de comparaison multi-fichiers et ses propriétés de modèle sont présents, mais aucun contrôle de la vue actuelle ne les expose. L'export PDF n'a pas non plus de commande utilisable. Le README a été corrigé pour ne plus annoncer ces possibilités comme disponibles ; ajouter leurs interfaces constituerait un travail fonctionnel séparé.
 
