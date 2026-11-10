@@ -481,6 +481,36 @@ public class RegressionTests
         finally { File.Delete(path); }
     }
 
+    [Fact]
+    public async Task LogStillBeingWrittenByPhd2CanBeLoaded()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "GuidingAnalyzer-" + Guid.NewGuid() + ".txt");
+        try
+        {
+            // PHD2 mid-session: the log is held open for writing, there is no
+            // "Guiding Ends" yet, and the newest row has only been partly written.
+            using (var phd2 = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
+            {
+                var log = """
+                    Guiding Begins at 2026-10-08 20:00:00
+                    Pixel scale = 2.0 arc-sec/px
+                    Frame,Time,mount,dx,dy,RARawDistance,DECRawDistance,RAGuideDistance,DECGuideDistance,RADuration,RADirection,DECDuration,DECDirection,XStep,YStep,StarMass,SNR,ErrorCode
+                    1,0,Mount,0,0,1,2,0.5,-0.25,100,W,50,N,0,0,100,20,0
+                    2,3,Mount,0,0,1,2,0,0,0,,0,,0,0,100,20,0
+
+                    """ + "3,6,Mount,0,0,1.";
+                var bytes = System.Text.Encoding.UTF8.GetBytes(log);
+                phd2.Write(bytes, 0, bytes.Length);
+                phd2.Flush();
+
+                var session = Assert.Single(await new GuidingDataService().LoadAllSessionsAsync(path));
+                Assert.Equal(2, session.RawPoints.Count);
+                Assert.Equal(2, session.RawPoints[1].FrameIndex);
+            }
+        }
+        finally { File.Delete(path); }
+    }
+
     private static readonly DateTime Epoch = new(2026, 10, 8, 20, 0, 0);
     internal static List<GuidingSession> Night(double lat, double az, double alt)
         => new[] { -3.0, 0.0, 3.0 }.Select((ha, i) => TrackingSession(lat, az, alt, ha, i == 1 ? -1 : 1, i)).ToList();
