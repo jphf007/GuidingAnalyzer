@@ -39,13 +39,23 @@ foreach ($previousNotes in Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Docs
 $binaryZip = Join-Path $artifactDir "GuidingAnalyzer-v$($manifest.Version)-preview.zip"
 Write-Zip $binaryZip $entries
 
-Push-Location $repoRoot
-try {
-    $sourceFiles = @(git ls-files --cached --others --exclude-standard)
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate source files.' }
-} finally { Pop-Location }
-$sourceEntries = @($sourceFiles | Where-Object { $_ -notlike '*.zip' } | ForEach-Object {
-    @{ Source = Join-Path $repoRoot $_; Name = $_ }
+# Explicit source inventory also works from a downloaded source ZIP, without Git.
+# Never distribute build output, audit snapshots, local guide logs, or private files.
+$sourceFiles = @(Get-ChildItem -LiteralPath $repoRoot -File | Where-Object {
+    $_.Extension -in @('.cs', '.xaml', '.csproj', '.sln') -or
+    $_.Name -in @('README.md', 'LICENSE.txt', 'plugin.json', '.gitignore', '.gitattributes')
+})
+foreach ($folder in @('Services', 'Models', 'Properties', 'Tests', 'Docs', 'scripts')) {
+    $folderPath = Join-Path $repoRoot $folder
+    if (Test-Path -LiteralPath $folderPath) {
+        $sourceFiles += @(Get-ChildItem -LiteralPath $folderPath -Recurse -File | Where-Object {
+            $_.Extension -in @('.cs', '.xaml', '.csproj', '.md', '.ps1', '.json') -and
+            [IO.Path]::GetRelativePath($folderPath, $_.FullName) -notmatch '(^|[\\/])(bin|obj|artifacts)([\\/]|$)'
+        })
+    }
+}
+$sourceEntries = @($sourceFiles | Sort-Object FullName -Unique | ForEach-Object {
+    @{ Source = $_.FullName; Name = [IO.Path]::GetRelativePath($repoRoot, $_.FullName).Replace('\', '/') }
 })
 $sourceZip = Join-Path $artifactDir "GuidingAnalyzer-v$($manifest.Version)-sources.zip"
 Write-Zip $sourceZip $sourceEntries

@@ -8,7 +8,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>NINA.Plugin.GuidingAnalyzer</AssemblyName>
     <RootNamespace>GuidingAnalyzer</RootNamespace>
-    <Version>1.0.0.4</Version>
+    <Version>1.0.0.5</Version>
     <Authors>JPH</Authors>
     <Description>Advanced PHD2 guiding analysis plugin for NINA</Description>
     <!-- AssemblyInfo.cs is handwritten — disable auto-generation -->
@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <Compile Remove="Tests\**\*.cs" />
+    <Compile Remove="artifacts\**\*.cs" />
   </ItemGroup>
 
   <!-- XAML pages -->

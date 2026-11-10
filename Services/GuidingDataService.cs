@@ -68,12 +68,14 @@ namespace GuidingAnalyzer.Services
 
                     // Start timestamp
                     var m = Regex.Match(line, @"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})");
-                    if (m.Success && DateTime.TryParse(m.Groups[1].Value, out DateTime parsedStart))
+                    if (m.Success && DateTime.TryParseExact(m.Groups[1].Value, "yyyy-MM-dd HH:mm:ss",
+                        CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedStart))
                         session.StartTime = parsedStart;
 
                     // Local header (entre Guiding Begins et la ligne Frame,Time,...)
                     i++;
-                    while (i < lines.Length && !lines[i].StartsWith("Frame,") && !lines[i].StartsWith("Guiding Ends"))
+                    while (i < lines.Length && !lines[i].StartsWith("Frame,") && !lines[i].StartsWith("Guiding Ends")
+                        && !lines[i].StartsWith("Guiding Begins") && !lines[i].StartsWith("Calibration Begins"))
                     {
                         ParseSessionHeader(lines[i], session);
                         i++;
@@ -241,9 +243,9 @@ namespace GuidingAnalyzer.Services
             // Mount = ..., connected, guiding enabled, xAngle = 0.3, xRate = 4.041, yAngle = 101.9, yRate = 6.442, parity = +/-
             if (h.StartsWith("Mount =") && h.Contains("xAngle"))
             {
-                var mXa = Regex.Match(h, @"xAngle\s*=\s*([\d.]+)");
+                var mXa = Regex.Match(h, @"xAngle\s*=\s*([+-]?[\d.]+)");
                 var mXr = Regex.Match(h, @"xRate\s*=\s*([\d.]+)");
-                var mYa = Regex.Match(h, @"yAngle\s*=\s*([\d.]+)");
+                var mYa = Regex.Match(h, @"yAngle\s*=\s*([+-]?[\d.]+)");
                 var mYr = Regex.Match(h, @"yRate\s*=\s*([\d.]+)");
                 var mPa = Regex.Match(h, @"parity\s*=\s*(\S+)");
                 if (mXa.Success && double.TryParse(mXa.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double xa)) info.MountXAngle = xa;
@@ -447,14 +449,16 @@ namespace GuidingAnalyzer.Services
                 double scale = pixelScale > 0 ? pixelScale : 1.0;
                 var pt = new GuidingPoint();
 
-                pt.FrameIndex = GetInt(parts, colMap, "Frame", 0);
+                pt.FrameIndex = GetInt(parts, colMap, "Frame", -1);
+                if (pt.FrameIndex < 0) return null;
 
-                double timeSec = GetDouble(parts, colMap, "Time", 0);
+                double timeSec = GetDouble(parts, colMap, "Time", double.NaN);
+                if (!double.IsFinite(timeSec) || timeSec < 0) return null;
                 pt.Timestamp = sessionStart.AddSeconds(timeSec);
 
                 // PHD2 stores raw distances in pixels → convert to arcsec
-                pt.RaError  = GetDouble(parts, colMap, "RARawDistance",  0) * scale;
-                pt.DecError = GetDouble(parts, colMap, "DECRawDistance", 0) * scale;
+                pt.RaError  = GetDouble(parts, colMap, "RARawDistance", double.NaN) * scale;
+                pt.DecError = GetDouble(parts, colMap, "DECRawDistance", double.NaN) * scale;
                 double raGuide = GetDouble(parts, colMap, "RAGuideDistance", double.NaN);
                 double decGuide = GetDouble(parts, colMap, "DECGuideDistance", double.NaN);
                 if (double.IsFinite(raGuide)) pt.RaGuideDistanceArcsec = raGuide * scale;
@@ -472,10 +476,11 @@ namespace GuidingAnalyzer.Services
                 pt.StarSNR = GetDouble(parts, colMap, "SNR", 0);
 
                 // ErrorCode = 0 → valid frame
-                int errorCode = GetInt(parts, colMap, "ErrorCode", 0);
+                int errorCode = GetInt(parts, colMap, "ErrorCode", -1);
                 string device = GetString(parts, colMap, "mount");
                 pt.IsGuideStep = (errorCode == 0 || errorCode == 1)
-                    && device != "DROP" && device != "AO";
+                    && device != "DROP" && device != "AO"
+                    && double.IsFinite(pt.RaError) && double.IsFinite(pt.DecError);
 
                 return pt;
             }
@@ -490,7 +495,7 @@ namespace GuidingAnalyzer.Services
         {
             if (map.TryGetValue(key, out int idx) && idx < parts.Length)
                 if (double.TryParse(parts[idx].Trim().Trim('"'), NumberStyles.Float,
-                    CultureInfo.InvariantCulture, out double v)) return v;
+                    CultureInfo.InvariantCulture, out double v) && double.IsFinite(v)) return v;
             return fallback;
         }
 
@@ -525,6 +530,8 @@ namespace GuidingAnalyzer.Services
             while (i < lines.Length && !lines[i].TrimStart().StartsWith("Direction,"))
             {
                 var hLine = lines[i].Trim();
+                if (hLine.StartsWith("Guiding Begins") || hLine.StartsWith("Guiding Ends")
+                    || hLine.StartsWith("Calibration Begins") || hLine.StartsWith("Calibration failed")) return cal;
 
                 if (hLine.StartsWith("Pixel scale ="))
                 {
@@ -600,7 +607,7 @@ namespace GuidingAnalyzer.Services
                 //          "North calibration complete. Angle = 101.9 deg, Rate = 6.442 px/sec, Parity = Odd"
                 if (dLine.Contains("calibration complete"))
                 {
-                    var mAngle  = Regex.Match(dLine, @"Angle\s*=\s*([\d.]+)");
+                    var mAngle  = Regex.Match(dLine, @"Angle\s*=\s*([+-]?[\d.]+)");
                     var mRate   = Regex.Match(dLine, @"Rate\s*=\s*([\d.]+)");
                     var mParity = Regex.Match(dLine, @"Parity\s*=\s*(\w+)");
                     double angle  = mAngle.Success  ? double.Parse(mAngle.Groups[1].Value,  CultureInfo.InvariantCulture) : 0;

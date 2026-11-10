@@ -6,8 +6,8 @@ using System.Runtime.InteropServices;
 [assembly: Guid("A1B2C3D4-E5F6-7890-ABCD-EF1234567890")]
 
 // [MANDATORY] The assembly versioning — increment for each new release build
-[assembly: AssemblyVersion("1.0.0.4")]
-[assembly: AssemblyFileVersion("1.0.0.4")]
+[assembly: AssemblyVersion("1.0.0.5")]
+[assembly: AssemblyFileVersion("1.0.0.5")]
 
 // [MANDATORY] The name of your plugin (used as the plugin folder name by NINA)
 [assembly: AssemblyTitle("GuidingAnalyzer")]

@@ -198,43 +198,31 @@ namespace GuidingAnalyzer.Services
             GuidingSessionInfo? info, CalibrationSession? cal,
             List<GuidingAdvice> advice)
         {
-            var points = session.RawPoints.Where(p => p.IsGuideStep).ToList();
+            var points = session.RawPoints.Where(GuidingDataQuality.IsUsable).ToList();
             if (points.Count < 20) return;
 
-            int dirChanges = 0;
-            double totalLag = 0;
-            for (int i = 2; i < points.Count - 1; i++)
-            {
-                bool changed = Math.Sign(points[i].DecCorrection) != Math.Sign(points[i - 1].DecCorrection)
-                            && Math.Abs(points[i].DecCorrection) > 50;
-                if (changed)
-                {
-                    double errAfter = Math.Abs(points[i + 1].DecError);
-                    if (errAfter > 0.4) { dirChanges++; totalLag += errAfter; }
-                }
-            }
+            var (dirChanges, avgLag) = GuidingDataQuality.DecReversals(session.RawPoints, .4);
 
             if (dirChanges > 3)
             {
-                double avgLag = totalLag / dirChanges;
-                bool hasBacklashComp = info?.BacklashCompEnabled == "true" || info?.BacklashCompEnabled == "1";
+                bool hasBacklashComp = GuidingDataQuality.BacklashCompensationEnabled(info);
 
                 if (avgLag > 1.5)
                     advice.Add(new GuidingAdvice {
                         Priority = AdvicePriority.High, Category = AdviceCategory.Backlash,
-                        Icon = "↕", Title = "Significant DEC backlash",
-                        Detail = $"Mechanical play detected during DEC direction changes: mean residual error {avgLag:F2}\". PHD2 takes several frames to recover.",
+                        Icon = "↕", Title = "Large residuals after DEC reversals",
+                        Detail = $"Mean residual after actual DEC pulse reversals: {avgLag:F2}\". Backlash is one possible cause; this is not a measured delay.",
                         Action  = hasBacklashComp
-                            ? $"Backlash compensation is active ({info?.BacklashPulseMs} ms). Increase the value or switch to uni-directional DEC guiding. Check mechanics (belt and/or gears)."
-                            : "Enable DEC backlash compensation in PHD2 Brain. Slightly detune polar alignment (< 10') for a constant DEC drift allowing uni-directional guiding.",
+                            ? $"Backlash compensation is active ({info?.BacklashPulseMs} ms). Confirm the cause with PHD2 Guiding Assistant before adjusting it."
+                            : "Confirm backlash with PHD2 Guiding Assistant before enabling or adjusting compensation.",
                         Context = $"{dirChanges} changes detected, mean lag {avgLag:F2}\""
                     });
                 else
                     advice.Add(new GuidingAdvice {
                         Priority = AdvicePriority.Medium, Category = AdviceCategory.Backlash,
-                        Icon = "↕", Title = "Moderate DEC backlash",
-                        Detail = $"Slight play detected during DEC direction changes ({dirChanges} occurrences, lag {avgLag:F2}\").",
-                        Action  = "Enable backlash compensation in PHD2 Brain if not already done. Check belt and/or gear tension.",
+                        Icon = "↕", Title = "Residuals after DEC reversals",
+                        Detail = $"{dirChanges} reversals with mean subsequent residual {avgLag:F2}\"; backlash is a hypothesis to confirm.",
+                        Action  = "Inspect pulse responses and use the PHD2 Guiding Assistant backlash test before changing compensation.",
                         Context = $"mean lag {avgLag:F2}\""
                     });
             }
@@ -460,17 +448,17 @@ namespace GuidingAnalyzer.Services
             if (corr > 0.7)
                 advice.Add(new GuidingAdvice {
                     Priority = AdvicePriority.High, Category = AdviceCategory.Flexure,
-                    Icon = "🔗", Title = "Strong RA/DEC correlation — likely flexure",
-                    Detail = $"Pearson correlation RA/DEC = {s.RaDecCorrelation:+0.00;-0.00}. A correlation > 0.7 indicates both axes move together, a typical sign of differential flexure.",
-                    Action  = "Check rigidity of the focuser drawtube and guide scope rings. An OAG (Off-Axis Guider) eliminates differential flexure.",
+                    Icon = "🔗", Title = "Strong common RA/DEC motion",
+                    Detail = $"Pearson correlation RA/DEC = {s.RaDecCorrelation:+0.00;-0.00}. This alone does not identify a mechanical cause or differential flexure.",
+                    Action  = "Compare simultaneous guide and main-camera measurements, and inspect shared disturbances and calibration.",
                     Context = $"Pearson r = {s.RaDecCorrelation:+0.00;-0.00}"
                 });
             else if (corr > 0.5)
                 advice.Add(new GuidingAdvice {
                     Priority = AdvicePriority.Medium, Category = AdviceCategory.Flexure,
                     Icon = "🔗", Title = "Moderate RA/DEC correlation",
-                    Detail = $"RA/DEC correlation = {s.RaDecCorrelation:+0.00;-0.00}. Slight covariance — possible minor mechanical flexure.",
-                    Action  = "Check guide scope mounting rigidity. Tighten all fixing screws.",
+                    Detail = $"RA/DEC correlation = {s.RaDecCorrelation:+0.00;-0.00}. The guide log alone does not establish its cause.",
+                    Action  = "Inspect simultaneous disturbances and calibration before attributing this to mechanical flexure.",
                     Context = $"Pearson r = {s.RaDecCorrelation:+0.00;-0.00}"
                 });
         }
@@ -589,7 +577,7 @@ namespace GuidingAnalyzer.Services
                 });
 
             // No backlash compensation but bi-directional guiding
-            if (!string.Equals(info.BacklashCompEnabled, "enabled", StringComparison.OrdinalIgnoreCase)
+            if (!GuidingDataQuality.BacklashCompensationEnabled(info)
                 && info.DecGuideMode == "Auto")
                 advice.Add(new GuidingAdvice {
                     Priority = AdvicePriority.Info, Category = AdviceCategory.Backlash,

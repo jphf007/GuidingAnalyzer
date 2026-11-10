@@ -10,6 +10,27 @@
              Foreground="White">
 
     <UserControl.Resources>
+        <!-- Keep the selected tab header readable in the default light WPF tab template. -->
+        <Style TargetType="TabItem">
+            <Setter Property="HeaderTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                                            <Setter Property="Foreground" Value="#202030"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <!-- Convertit un bool en Visible/Collapsed -->
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <!-- Inverse : False → Visible, True → Collapsed -->
@@ -1206,7 +1227,7 @@
                                             </TextBlock>
                                         </Grid>
                                         <TextBlock Foreground="White" FontSize="9" Margin="0,6,0,0" TextWrapping="Wrap"
-                                                   Text="A correlation &gt; 0.5 between RA and DEC indicates likely optical flexure or balance issue."/>
+                                                   Text="RA/DEC correlation describes shared motion; it does not identify differential flexure or its cause."/>
                                     </StackPanel>
 
                                     <!-- Test de stationnarité -->

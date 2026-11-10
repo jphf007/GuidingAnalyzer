@@ -16,7 +16,7 @@ namespace GuidingAnalyzer.Services
             sb.AppendLine("Frame,Timestamp,RA_Error_arcsec,Dec_Error_arcsec,RA_Corr_ms,Dec_Corr_ms,SNR,Valid");
             foreach (var p in session.RawPoints)
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                    "{0},{1:yyyy-MM-dd HH:mm:ss},{2:F4},{3:F4},{4:F1},{5:F1},{6:F1},{7}",
+                    "{0},{1:yyyy-MM-dd HH:mm:ss.fff},{2:F4},{3:F4},{4:F1},{5:F1},{6:F1},{7}",
                     p.FrameIndex, p.Timestamp, p.RaError, p.DecError,
                     p.RaCorrection, p.DecCorrection, p.StarSNR, p.IsGuideStep ? 1 : 0));
             File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
@@ -26,7 +26,8 @@ namespace GuidingAnalyzer.Services
         {
             var export = new {
                 ExportedAt   = DateTime.Now,
-                Session      = new { session.SourceFile, session.MountName, session.CameraName, session.PixelScale },
+                Session      = new { session.SourceFile, session.SessionIndex, session.StartTime,
+                    session.MountName, session.CameraName, session.PixelScale },
                 Statistics   = session.Statistics,
                 FftRaPeaks   = session.FftRa?.SignificantPeaks,
                 FftDecPeaks  = session.FftDec?.SignificantPeaks,

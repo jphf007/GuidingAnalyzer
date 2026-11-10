@@ -64,29 +64,16 @@ namespace GuidingAnalyzer.Services
 
         private void DetectBacklash(GuidingSession session, List<GuidingAnomaly> anomalies)
         {
-            var points = session.RawPoints;
-            if (points.Count < 20) return;
-            int directionChanges = 0;
-            double totalDelay = 0;
-            for (int i = 2; i < points.Count - 1; i++)
-            {
-                bool corrChanged = Math.Sign(points[i].DecCorrection) != Math.Sign(points[i - 1].DecCorrection)
-                                   && Math.Abs(points[i].DecCorrection) > 50;
-                if (corrChanged)
-                {
-                    double errorAfter = Math.Abs(points[i + 1].DecError);
-                    if (errorAfter > 0.5) { directionChanges++; totalDelay += errorAfter; }
-                }
-            }
+            if (session.RawPoints.Count(GuidingDataQuality.IsUsable) < 20) return;
+            var (directionChanges, avgDelay) = GuidingDataQuality.DecReversals(session.RawPoints, .5);
             if (directionChanges > 3)
             {
-                double avgDelay = totalDelay / directionChanges;
                 anomalies.Add(new GuidingAnomaly {
                     Type = AnomalyType.Backlash,
                     Severity = avgDelay > 1.5 ? AnomalySeverity.Error : AnomalySeverity.Warning,
-                    Title = "Probable mechanical backlash in DEC",
-                    Description = string.Format("Play detected during DEC direction changes. Mean residual error: {0:F2} arcsec", avgDelay),
-                    Recommendation = "Adjust backlash compensation in PHD2 (Brain → DEC Backlash) or tighten belts/screws.",
+                    Title = "Possible DEC backlash — reversal residuals",
+                    Description = string.Format("Residuals after {0} DEC pulse reversals: mean {1:F2} arcsec. This is not a backlash measurement.", directionChanges, avgDelay),
+                    Recommendation = "Inspect these reversals and confirm with the PHD2 Guiding Assistant backlash test before changing compensation.",
                     MeasuredValue = avgDelay,
                     Unit = "arcsec"
                 });
@@ -96,25 +83,31 @@ namespace GuidingAnalyzer.Services
         private void DetectAggressiveCorrections(GuidingSession session, List<GuidingAnomaly> anomalies)
         {
             if (session.Statistics == null) return;
-            var points = session.RawPoints.Where(p => p.IsGuideStep).ToList();
+            var points = session.RawPoints.Where(GuidingDataQuality.IsUsable).ToList();
             if (points.Count < 10) return;
             double avgError = points.Average(p => p.TotalError);
-            int oscillations = 0;
-            for (int i = 1; i < points.Count - 1; i++)
+            int oscillations = 0, correctionTransitions = 0;
+            foreach (var segment in GuidingDataQuality.Segments(session.RawPoints))
+            for (int i = 1; i < segment.Count; i++)
             {
-                bool raFlip = Math.Sign(points[i].RaError) != Math.Sign(points[i - 1].RaError);
-                bool decFlip = Math.Sign(points[i].DecError) != Math.Sign(points[i - 1].DecError);
+                var previous = segment[i - 1]; var current = segment[i];
+                bool raPulse = double.IsFinite(previous.RaCorrection) && previous.RaCorrection != 0;
+                bool decPulse = double.IsFinite(previous.DecCorrection) && previous.DecCorrection != 0;
+                if (!raPulse && !decPulse) continue;
+                correctionTransitions++;
+                bool raFlip = raPulse && Math.Sign(current.RaError) != Math.Sign(previous.RaError);
+                bool decFlip = decPulse && Math.Sign(current.DecError) != Math.Sign(previous.DecError);
                 if (raFlip || decFlip) oscillations++;
             }
-            double oscillationRate = (double)oscillations / points.Count;
-            if (oscillationRate > 0.6 && avgError < 0.8)
+            double oscillationRate = correctionTransitions > 0 ? (double)oscillations / correctionTransitions : 0;
+            if (correctionTransitions >= 10 && oscillationRate > 0.6 && avgError < 0.8)
             {
                 anomalies.Add(new GuidingAnomaly {
                     Type = AnomalyType.AggressiveCorrection,
                     Severity = AnomalySeverity.Warning,
-                    Title = "Over-aggressive corrections (hunting)",
-                    Description = $"PHD2 is hunting: {oscillationRate:P0} of frames change sign. Aggressiveness too high.",
-                    Recommendation = "Reduce RA/DEC aggressiveness in PHD2 (Brain → 60-70% instead of 100%). Consider the Hysteresis algorithm.",
+                    Title = "Possible over-correction",
+                    Description = $"{oscillationRate:P0} of corrected frame transitions change error sign. Noise can also contribute.",
+                    Recommendation = "Review the pulse/response sequence and compare a small aggressiveness adjustment under similar conditions.",
                     MeasuredValue = oscillationRate * 100,
                     Unit = "%"
                 });
@@ -152,9 +145,9 @@ namespace GuidingAnalyzer.Services
                 anomalies.Add(new GuidingAnomaly {
                     Type = AnomalyType.DifferentialFlexure,
                     Severity = combinedDrift > 1.0 ? AnomalySeverity.Error : AnomalySeverity.Warning,
-                    Title = "Possible differential flexure",
-                    Description = $"Non-linear RA drift suggesting setup flexure: {combinedDrift:F2} arcsec/min",
-                    Recommendation = "Check guide scope mounting rigidity. Use an OAG (Off-Axis Guider) to eliminate flexure.",
+                    Title = "RA drift with limited DEC drift",
+                    Description = $"Estimated combined drift: {combinedDrift:F2} arcsec/min. A guide log alone cannot establish differential flexure.",
+                    Recommendation = "Check tracking rate and compare guide-star motion with the main-camera images to investigate the cause.",
                     MeasuredValue = combinedDrift,
                     Unit = "arcsec/min"
                 });

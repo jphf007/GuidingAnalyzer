@@ -53,6 +53,7 @@ namespace GuidingAnalyzer.Services
         /// Key = full path of the source file.
         /// </summary>
         private readonly Dictionary<string, List<GuidingSession>> _sessionsByFile = new();
+        private readonly object _sessionsLock = new();
 
         private readonly GuidingDataService _dataService  = new();
         private readonly FftAnalysisService  _fftService   = new();
@@ -70,8 +71,8 @@ namespace GuidingAnalyzer.Services
         public async Task<List<GuidingSession>> AddFileAsync(string filePath)
         {
             var sessions = await _dataService.LoadAllSessionsAsync(filePath);
-            await Task.Run(() => ComputeSessionData(sessions));
-            _sessionsByFile[filePath] = sessions;
+            await PrepareSessionsAsync(sessions);
+            lock (_sessionsLock) _sessionsByFile[filePath] = sessions;
             return sessions;
         }
 
@@ -81,8 +82,10 @@ namespace GuidingAnalyzer.Services
         /// </summary>
         public void SetSessions(string filePath, List<GuidingSession> sessions)
         {
-            _sessionsByFile[filePath] = sessions;
+            lock (_sessionsLock) _sessionsByFile[filePath] = sessions;
         }
+
+        public Task PrepareSessionsAsync(List<GuidingSession> sessions) => Task.Run(() => ComputeSessionData(sessions));
 
         /// <summary>
         /// Computes stats + FFT for sessions that do not yet have this data.
@@ -91,6 +94,8 @@ namespace GuidingAnalyzer.Services
         {
             foreach (var session in sessions)
             {
+                if (!double.IsFinite(session.PixelScale) || session.PixelScale <= 0
+                    || !session.RawPoints.Any(GuidingDataQuality.IsUsable)) continue;
                 // Statistiques RMS
                 if (session.Statistics == null)
                 {
@@ -120,21 +125,22 @@ namespace GuidingAnalyzer.Services
         /// </summary>
         public void RemoveFile(string filePath)
         {
-            _sessionsByFile.Remove(filePath);
+            lock (_sessionsLock) _sessionsByFile.Remove(filePath);
         }
 
         /// <summary>Liste des chemins de fichiers actuellement chargés.</summary>
-        public IReadOnlyList<string> LoadedFilePaths =>
-            _sessionsByFile.Keys.ToList();
+        public IReadOnlyList<string> LoadedFilePaths
+        {
+            get { lock (_sessionsLock) return _sessionsByFile.Keys.ToList(); }
+        }
 
         /// <summary>
         /// All sessions from all loaded files, sorted by start date.
         /// </summary>
-        public IReadOnlyList<GuidingSession> AllSessions =>
-            _sessionsByFile.Values
-                           .SelectMany(s => s)
-                           .OrderBy(s => s.StartTime)
-                           .ToList();
+        public IReadOnlyList<GuidingSession> AllSessions
+        {
+            get { lock (_sessionsLock) return _sessionsByFile.Values.SelectMany(s => s).OrderBy(s => s.StartTime).ToList(); }
+        }
 
         // ─────────────────────────────────────────────────────────────────────
         // CALIBRATION GROUPING
@@ -210,14 +216,15 @@ namespace GuidingAnalyzer.Services
                 Session               = session,
                 DisplayLabel          = label,
                 SourceFileName        = fileName,
-                IsIncludedInComparison = true,
+                IsIncludedInComparison = stats != null && stats.FrameCount > 0
+                    && double.IsFinite(session.PixelScale) && session.PixelScale > 0,
 
                 CalibrationGroupId    = ComputeCalibrationGroupId(cal),
                 CalibrationGroupLabel = ComputeCalibrationGroupLabel(cal),
 
-                RaRms       = stats?.RaRms    ?? 0,
-                DecRms      = stats?.DecRms   ?? 0,
-                TotalRms    = stats?.TotalRms ?? 0,
+                RaRms       = stats?.RaRms    ?? double.NaN,
+                DecRms      = stats?.DecRms   ?? double.NaN,
+                TotalRms    = stats?.TotalRms ?? double.NaN,
                 RaDrift     = stats?.RaDriftArcsecPerMin  ?? 0,
                 DecDrift    = stats?.DecDriftArcsecPerMin ?? 0,
                 FrameCount  = stats?.FrameCount  ?? session.RawPoints.Count,
@@ -250,7 +257,8 @@ namespace GuidingAnalyzer.Services
 
             // Filtrer selon scope et flag de sélection
             var included = summaries
-                .Where(s => s.IsIncludedInComparison)
+                .Where(s => s.IsIncludedInComparison && s.Session.Statistics?.FrameCount > 0
+                    && double.IsFinite(s.TotalRms) && s.Session.PixelScale > 0)
                 .ToList();
 
             if (scope == ComparisonScope.SameCalibrationGroup && referenceSession != null)

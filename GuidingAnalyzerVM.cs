@@ -53,7 +53,7 @@ namespace GuidingAnalyzer
         partial void OnSelectedSessionChanged(GuidingSession? value)
         {
             if (value != null) _sessionAnalysisTask = AnalyzeSessionAsync(value);
-            else ++_analysisRevision;
+            else { ++_analysisRevision; ResetSessionDisplay(); }
         }
 
         // ── Current session ───────────────────────────────────────────────────
@@ -290,10 +290,19 @@ namespace GuidingAnalyzer
                 () => dlg.ShowDialog(Application.Current.MainWindow));
             if (result != true) return;
 
+            await LoadLogAsync(dlg.FileName);
+        }
+
+        private async Task LoadLogAsync(string filePath)
+        {
+
             // Display only the file name; keep the full path privately
-            SelectedFilePath = Path.GetFileName(dlg.FileName);
-            _fullFilePath    = dlg.FileName;
+            SelectedFilePath = Path.GetFileName(filePath);
+            _fullFilePath    = filePath;
             SelectedSession = null; // invalidate any analysis of the previous file
+            ResetSessionDisplay();
+            AvailableSessions.Clear();
+            HasSessions = false;
             IsLoading        = true;
             StatusMessage    = "Loading file…";
 
@@ -408,6 +417,13 @@ namespace GuidingAnalyzer
             try
             {
                 // All heavy computation in Task.Run (no UI access here)
+                if (!double.IsFinite(session.PixelScale) || session.PixelScale <= 0
+                    || !session.RawPoints.Any(GuidingDataQuality.IsUsable))
+                {
+                    ResetSessionDisplay();
+                    StatusMessage = "Analysis unavailable: a valid pixel scale and usable guiding frames are required for arcsecond measurements.";
+                    return;
+                }
                 await Task.Run(() =>
                 {
                     // Filter dithering/settling points for statistics
@@ -468,6 +484,31 @@ namespace GuidingAnalyzer
         // DISPLAY UPDATES
         // ─────────────────────────────────────────────────────────────────────
 
+        private void ResetSessionDisplay()
+        {
+            CurrentSession = null;
+            IsLoading = false;
+            RaRmsText = DecRmsText = TotalRmsText = RaDriftText = DecDriftText = FrameCountText = QualityGradeText = "—";
+            RaDriftConfidence = DecDriftConfidence = "";
+            RaDriftConfidenceValue = DecDriftConfidenceValue = 0;
+            SummaryRaRms = SummaryDecRms = SummaryTotalRms = SummaryRaDrift = SummaryDecDrift = "—";
+            SummaryRaDriftConf = SummaryDecDriftConf = SummaryFrames = SummaryQuality = "—";
+            SummaryMountRaAmplitude = SummaryMountDecAmplitude = SummaryMountRaResidual = SummaryMountDecResidual = "—";
+            SummaryRaSkewness = SummaryDecSkewness = SummaryRaKurtosis = SummaryDecKurtosis = "—";
+            SummaryRaDecCorrelation = SummaryRaStability = SummaryDecStability = "—";
+            Anomalies.Clear(); Advice.Clear(); PolarSessionRows.Clear();
+            HasPolarResult = HasPolarError = HasAltitudeData = false;
+            GuidingCurvePlot = CreateEmptyPlot("PHD2 Guiding Errors");
+            MountCurvePlot = CreateEmptyPlot("Reconstructed Mount Curve");
+            FftRaPlot = CreateEmptyPlot("FFT Spectrum — RA (Corrections removed)");
+            FftDecPlot = CreateEmptyPlot("FFT Spectrum — DEC (Corrections removed)");
+            FftRaUncorrectedPlot = CreateEmptyPlot("FFT Spectrum — RA (Guided residuals)");
+            FftDecUncorrectedPlot = CreateEmptyPlot("FFT Spectrum — DEC (Guided residuals)");
+            CalibrationPlot = CreateEmptyPlot("Calibration");
+            RmsVsAltitudePlot = CreateEmptyPlot("RMS vs Altitude");
+            SlidingRmsPlot = CreateEmptyPlot("Sliding RMS and altitude");
+        }
+
         private void UpdateStatisticsDisplay(GuidingSession session)
         {
             var s = session.Statistics;
@@ -490,7 +531,7 @@ namespace GuidingAnalyzer
             var cleanMount = session.MountCurve.Where(p => !p.IsDitherOrSettling).ToList();
             if (cleanMount.Count > 10)
             {
-                var drift = _statsService.ComputeDriftOnMountCurve(cleanMount);
+                var drift = _statsService.ComputeDriftOnMountCurve(session.MountCurve);
                 RaDriftText             = $"{drift.RaDriftArcsecPerMin:+0.00;-0.00;0.00}\"/min";
                 DecDriftText            = $"{drift.DecDriftArcsecPerMin:+0.00;-0.00;0.00}\"/min";
                 RaDriftConfidence       = drift.RaConfidenceLabel;
@@ -555,6 +596,10 @@ namespace GuidingAnalyzer
                 DecDriftText       = $"{s.DecDriftArcsecPerMin:F2}\"/min";
                 RaDriftConfidence  = "N/A";
                 DecDriftConfidence = "N/A";
+                RaDriftConfidenceValue = DecDriftConfidenceValue = 0;
+                SummaryRaDriftConf = SummaryDecDriftConf = "N/A";
+                SummaryMountRaAmplitude = SummaryMountDecAmplitude = "—";
+                SummaryMountRaResidual = SummaryMountDecResidual = "—";
                 SummaryRaDrift     = "N/A (short session)";
                 SummaryDecDrift    = "N/A (short session)";
             }
@@ -574,7 +619,7 @@ namespace GuidingAnalyzer
         private static string FormatKurt(double v) =>
             $"{v:+0.00;-0.00;0.00}  {(v switch { > 2 => "⚠ Frequent and large peaks — check balance, backlash or seeing", > 1 => "△ Some notable peaks — monitor min-move", < -1 => "✓ Very uniform distribution — very regular guiding", _ => "≈ Regular distribution — normal behaviour" })}";
         private static string FormatCorr(double v) =>
-            $"{v:+0.00;-0.00;0.00}  {(Math.Abs(v) switch { > 0.7 => "⚠ likely flexure", > 0.5 => "moderate correlation", > 0.3 => "weak correlation", _ => "✓ independent" })}";
+            $"{v:+0.00;-0.00;0.00}  {(Math.Abs(v) switch { > 0.7 => "strong common motion", > 0.5 => "moderate correlation", > 0.3 => "weak correlation", _ => "low linear correlation" })}";
         private static string FormatStab(double v) =>
             $"{v:F2}×  {(v switch { > 2.0 => "⚠ strong degradation", > 1.5 => "⚠ degradation detected", < 0.5 => "↑ improvement", _ => "✓ stable" })}";
 
@@ -1212,6 +1257,9 @@ namespace GuidingAnalyzer
 
         private async Task SyncMainFileToComparisonAsync(string filePath, List<GuidingSession> sessions)
         {
+            // Mount curves were precomputed for the night, but most sessions may not
+            // have statistics/FFT yet. Never compare unanalysed sessions as zero RMS.
+            await _multiSessionService.PrepareSessionsAsync(sessions);
             // Inject already-computed sessions (FFT + stats present after AnalyzeSessionAsync)
             // without reparsing the file, to preserve computed data
             _multiSessionService.SetSessions(filePath, sessions);
@@ -1355,7 +1403,7 @@ namespace GuidingAnalyzer
 
             var result = _altitudeService.Analyze(session, allSessions, lat.Value);
 
-            AltitudeLatitudeText   = $"Estimated latitude: {lat.Value:F1}° N";
+            AltitudeLatitudeText   = $"Estimated latitude: {Math.Abs(lat.Value):F1}° {(lat.Value < 0 ? "S" : "N")}";
             AltitudeMeridianFlip   = result.MeridianFlipDetected;
             HasAltitudeData        = result.ScatterPoints.Count >= 2 || result.SlidingPoints.Count >= 2;
             AltitudeWindowLabel    = result.WindowLabel;

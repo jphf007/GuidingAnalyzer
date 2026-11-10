@@ -25,13 +25,14 @@ namespace GuidingAnalyzer.Services
         {
             var obs = sessions
                 .Select(s => s.SessionInfo)
-                .Where(i => i != null && i.AltDeg > 5 && i.AltDeg < 89 && Math.Abs(i.HourAngle) < 5.5)
+                .Where(i => i != null && double.IsFinite(i.DecDeg) && Math.Abs(i.DecDeg) <= 90
+                    && i.AltDeg > 5 && i.AltDeg < 89 && Math.Abs(i.HourAngle) < 5.5)
                 .Select(i => (A: ToRad(i!.AltDeg), D: ToRad(i.DecDeg), H: ToRad(i.HourAngle * 15.0)))
                 .ToList();
             if (obs.Count < 3) return null;
 
-            double bestLat = 48.0, bestErr = double.MaxValue;
-            for (int k = 200; k <= 700; k++)
+            double bestLat = 0, bestErr = double.MaxValue;
+            for (int k = -900; k <= 900; k++)
             {
                 double lat = ToRad(k / 10.0);
                 double err = obs.Sum(o => { double p = Math.Sin(o.D)*Math.Sin(lat)+Math.Cos(o.D)*Math.Cos(lat)*Math.Cos(o.H); double d = Math.Sin(o.A)-p; return d*d; });
@@ -68,11 +69,10 @@ namespace GuidingAnalyzer.Services
 
         private static double EstimateFrameInterval(List<GuidingSession> sessions)
         {
-            var s = sessions.Where(s => s.RawPoints.Count > 10).OrderByDescending(s => s.RawPoints.Count).FirstOrDefault();
-            if (s == null) return 1.5;
-            var pts = s.RawPoints.Where(p => !p.IsDitherOrSettling).ToList();
-            if (pts.Count < 2) return 1.5;
-            return (pts[^1].Timestamp - pts[0].Timestamp).TotalSeconds / (pts.Count - 1);
+            var intervals = sessions.SelectMany(s => GuidingDataQuality.Segments(s.RawPoints))
+                .SelectMany(p => p.Zip(p.Skip(1), (a, b) => (b.Timestamp - a.Timestamp).TotalSeconds))
+                .Where(t => t > 0).OrderBy(t => t).ToArray();
+            return intervals.Length == 0 ? 1.5 : intervals[intervals.Length / 2];
         }
 
         // ── Main analysis ────────────────────────────────────────────────
@@ -101,40 +101,38 @@ namespace GuidingAnalyzer.Services
         // ── Continuous sliding RMS ──────────────────────────────────────────────
         private static List<SlidingRmsPoint> ComputeSlidingAll(List<GuidingSession> sessions, double latDeg, int wf)
         {
-            var frames = new List<(GuidingPoint pt, GuidingSession sess)>();
-            foreach (var sess in sessions.OrderBy(s => s.StartTime))
-                if (sess.SessionInfo != null)
-                    foreach (var pt in sess.RawPoints.Where(p => !p.IsDitherOrSettling))
-                        frames.Add((pt, sess));
-
-            if (frames.Count < wf) return new();
-
             var result = new List<SlidingRmsPoint>();
-            DateTime t0 = frames[0].pt.Timestamp;
-            int half = wf / 2;
-
-            for (int i = half; i < frames.Count - half; i++)
+            DateTime? t0 = null;
+            foreach (var sessM in sessions.OrderBy(s => s.StartTime))
             {
-                var win = frames.Skip(i - half).Take(wf).ToList();
-                double raRms  = Rms(win.Select(w => w.pt.RaError));
-                double decRms = Rms(win.Select(w => w.pt.DecError));
-                if (raRms <= 0 && decRms <= 0) continue;
-
-                var (ptM, sessM) = frames[i];
-                double ha0 = sessM.SessionInfo!.HourAngle * 15.0;
-                double alt = ComputeAltitude(latDeg, sessM.SessionInfo.DecDeg, ha0, sessM.StartTime, ptM.Timestamp);
-
-                result.Add(new SlidingRmsPoint
+                var info = sessM.SessionInfo;
+                if (info == null || !double.IsFinite(info.HourAngle) || !double.IsFinite(info.DecDeg)) continue;
+                foreach (var segment in GuidingDataQuality.Segments(sessM.RawPoints))
                 {
-                    Timestamp    = ptM.Timestamp,
-                    ElapsedMin   = (ptM.Timestamp - t0).TotalMinutes,
-                    RaRms        = raRms,
-                    DecRms       = decRms,
-                    TotalRms     = Math.Sqrt(raRms * raRms + decRms * decRms),
-                    AltitudeDeg  = alt,
-                    PierSide     = sessM.SessionInfo.PierSide,
-                    SessionIndex = sessM.SessionIndex,
-                });
+                    if (segment.Count < wf) continue;
+                    t0 ??= segment[0].Timestamp;
+                    double raSquareSum = 0, decSquareSum = 0;
+                    for (int j = 0; j < segment.Count; j++)
+                    {
+                        raSquareSum += segment[j].RaError * segment[j].RaError;
+                        decSquareSum += segment[j].DecError * segment[j].DecError;
+                        if (j >= wf)
+                        {
+                            raSquareSum -= segment[j - wf].RaError * segment[j - wf].RaError;
+                            decSquareSum -= segment[j - wf].DecError * segment[j - wf].DecError;
+                        }
+                        if (j + 1 < wf) continue;
+                        var ptM = segment[j - wf + 1 + wf / 2];
+                        double raRms = Math.Sqrt(Math.Max(0, raSquareSum / wf));
+                        double decRms = Math.Sqrt(Math.Max(0, decSquareSum / wf));
+                        result.Add(new SlidingRmsPoint {
+                            Timestamp = ptM.Timestamp, ElapsedMin = (ptM.Timestamp - t0.Value).TotalMinutes,
+                            RaRms = raRms, DecRms = decRms, TotalRms = Math.Sqrt(raRms * raRms + decRms * decRms),
+                            AltitudeDeg = ComputeAltitude(latDeg, info.DecDeg, info.HourAngle * 15, sessM.StartTime, ptM.Timestamp),
+                            PierSide = info.PierSide, SessionIndex = sessM.SessionIndex
+                        });
+                    }
+                }
             }
             return result;
         }
@@ -254,24 +252,17 @@ namespace GuidingAnalyzer.Services
         // ── Worm gear ─────────────────────────────────────────────────────
         public WormPeriodEstimate? EstimateWormPeriod(List<GuidingSession> sessions)
         {
-            var best = sessions.Where(s => s.FftRa != null && s.FftRa.Frequencies.Length > 4 && s.RawPoints.Count > 0)
-                               .OrderByDescending(s => s.RawPoints.Count).FirstOrDefault();
+            var best = sessions.Where(s => s.FftRa != null && s.FftRa.SignificantPeaks
+                    .Any(p => p.PeriodSeconds >= 200 && p.PeriodSeconds <= 2500))
+                .OrderByDescending(s => s.FftRa!.PointCount * s.FftRa.SamplingPeriodSeconds).FirstOrDefault();
             if (best?.FftRa == null) return null;
             var fft = best.FftRa;
 
-            double bAmp = 0, bFreq = 0; int bIdx = -1;
-            for (int i = 1; i < fft.Frequencies.Length; i++)
-            {
-                if (fft.Frequencies[i] < 1e-6) continue;
-                double ps = 3600.0 / fft.Frequencies[i];
-                if (ps < 200 || ps > 2500) continue;
-                if (fft.Amplitudes[i] > bAmp) { bAmp = fft.Amplitudes[i]; bFreq = fft.Frequencies[i]; bIdx = i; }
-            }
-            if (bIdx < 0 || bAmp < 1e-6) return null;
-
-            double period  = 3600.0 / bFreq;
-            double noise   = Median(fft.Amplitudes.Skip(1).ToArray());
-            double snr     = noise > 1e-10 ? bAmp / noise : 0;
+            var candidate = fft.SignificantPeaks.Where(p => p.PeriodSeconds >= 200 && p.PeriodSeconds <= 2500)
+                .OrderByDescending(p => p.PowerPercent).ThenByDescending(p => p.AmplitudeArcsec).First();
+            double bAmp = candidate.AmplitudeArcsec;
+            double period = candidate.PeriodSeconds;
+            double snr = candidate.PeakToNoiseRatio;
             double dur = Math.Max(0, fft.PointCount - 1) * fft.SamplingPeriodSeconds;
             double cycles  = period > 0 ? dur / period : 0;
             double phd2    = best.SessionInfo?.PecPeriodLength ?? 0;

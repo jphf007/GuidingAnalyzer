@@ -14,7 +14,7 @@ namespace GuidingAnalyzer.Services
         {
             var stats = new GuidingStatistics();
             if (points.Count == 0) return stats;
-            var valid = points.Where(p => p.IsGuideStep).ToList();
+            var valid = points.Where(GuidingDataQuality.IsUsable).ToList();
             if (valid.Count == 0) return stats;
 
             stats.FrameCount        = valid.Count;
@@ -74,17 +74,18 @@ namespace GuidingAnalyzer.Services
         /// <summary>Computes PEC harmonics from the RA FFT — called after FFT is available</summary>
         public void ComputePecHarmonics(GuidingStatistics stats, FftResult fftRa)
         {
-            if (fftRa == null || fftRa.Frequencies.Length < 2) return;
+            stats.RaHarmonics.Clear();
+            stats.WormPeriodSeconds = stats.WormAmplitudeArcsec = 0;
+            if (fftRa == null) return;
 
             // Build list (period in s, amplitude) — ignore DC (index 0)
             // Frequencies[] is in cycles/hour → period = 3600 / freq (seconds)
             var peaks = new List<(double PeriodSec, double AmplitudeArcsec)>();
-            for (int i = 1; i < fftRa.Frequencies.Length; i++)
+            foreach (var peak in fftRa.SignificantPeaks)
             {
-                if (fftRa.Frequencies[i] < 1e-6) continue;
-                double periodSec = 3600.0 / fftRa.Frequencies[i];
+                double periodSec = peak.PeriodSeconds;
                 if (periodSec < 5 || periodSec > 6000) continue;
-                peaks.Add((periodSec, fftRa.Amplitudes[i]));
+                peaks.Add((periodSec, peak.AmplitudeArcsec));
             }
 
             if (peaks.Count == 0) return;
@@ -236,6 +237,8 @@ namespace GuidingAnalyzer.Services
             double rms   = stats.TotalRms;
             string grade = rms < 0.3 ? "A+" : rms < 0.5 ? "A" : rms < 0.7 ? "B+" :
                            rms < 1.0 ? "B"  : rms < 1.5 ? "C" : rms < 2.5 ? "D"  : "F";
+            double maxDrift = Math.Max(Math.Abs(stats.RaDriftArcsecPerMin), Math.Abs(stats.DecDriftArcsecPerMin));
+            if (maxDrift > 1.0 && grade[0] < 'C') grade = "C";
             string desc  = grade switch {
                 "A+" => "Exceptional guiding — optimal conditions",
                 "A"  => "Excellent guiding — suitable for all imaging",
@@ -245,8 +248,6 @@ namespace GuidingAnalyzer.Services
                 "D"  => "Poor guiding — problem needs correcting",
                 _    => "Failed guiding — intervention required"
             };
-            double maxDrift = Math.Max(Math.Abs(stats.RaDriftArcsecPerMin), Math.Abs(stats.DecDriftArcsecPerMin));
-            if (maxDrift > 1.0 && grade[0] < 'C') grade = "C";
             stats.QualityGrade       = grade;
             stats.QualityDescription = desc;
         }

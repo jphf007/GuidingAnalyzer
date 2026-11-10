@@ -424,6 +424,8 @@ public class RegressionTests
             tabs.SelectedItem = tabs.Items.OfType<TabItem>().Single(t => ((string)t.Header).Contains("FFT"));
             view.Measure(new Size(1400, 1000)); view.Arrange(new Rect(0, 0, 1400, 1000)); Pump();
             Assert.Equal("Frequency (mHz)", vm.FftRaPlot.Axes[0].Title);
+            var selectedHeader = VisualDescendants(view).OfType<TextBlock>().First(t => t.Text == "FFT Analysis");
+            Assert.Equal(Color.FromRgb(32, 32, 48), Assert.IsType<SolidColorBrush>(selectedHeader.Foreground).Color);
             var series = Assert.IsType<OxyPlot.Series.AreaSeries>(vm.FftRaPlot.Series[0]);
             Assert.Equal(session.FftRa.Frequencies.Length - 1, series.Points.Count);
             var text = VisualDescendants(view).OfType<TextBlock>().Select(t => t.Text).ToArray();

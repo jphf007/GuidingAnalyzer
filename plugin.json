@@ -2,7 +2,7 @@
     "Name": "GuidingAnalyzer",
     "Description": "Advanced PHD2 guiding log analyzer: FFT, anomaly detection, polar alignment, statistics and recommendations.",
     "Author": "JPH",
-    "Version": "1.0.0.4",
+    "Version": "1.0.0.5",
     "AssemblyName": "NINA.Plugin.GuidingAnalyzer.dll",
     "TypeName": "GuidingAnalyzer.GuidingAnalyzerPlugin",
     "MinimumNINAVersion": "3.2.0.9001",

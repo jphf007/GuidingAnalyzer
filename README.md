@@ -7,7 +7,7 @@
 **Advanced PHD2 Guiding Log Analyzer for N.I.N.A.**
 A comprehensive plugin for analyzing PHD2 guiding logs with **FFT spectrum analysis, anomaly detection, polar alignment estimation, and actionable recommendations** to improve your astrophotography guiding performance.
 
-Version **1.0.0.4** is prepared for user validation. See [corrections, tests and installation instructions](Docs/Validation-1.0.0.4.md). RA reconstruction matches 1.0.0.2 exactly; the correction of 1.0.0.3 applies only to DEC. In Polar Alignment, enter decimal values with a **dot**, then click **Recalculate** to apply both fields. Polar estimates require known session coordinates and DEC parity.
+Version **1.0.0.5** is a locally validated release candidate; see the [audit, corrections and installation instructions](Docs/Validation-1.0.0.5.md). RA and DEC reconstruction are unchanged from 1.0.0.4; RA still matches 1.0.0.2 exactly. In Polar Alignment, enter decimal values with a **dot**, then click **Recalculate** to apply both fields. Polar estimates require known session coordinates and DEC parity.
 
 Build and test without changing your NINA installation:
 
@@ -32,7 +32,7 @@ Packages are written to `artifacts/`. The `preview.zip` contains the compiled pl
 - **FFT Spectrum Analysis**:
   - Corrections-removed estimates and guided residuals, with RA-only linear detrending; DEC drift is preserved.
   - Full frequency spectra and dominant-frequency tables with period, amplitude, estimated RMS and power share. Possible mechanical origins require confirmation.
-  - Multi-session comparison with overlaid FFT spectra.
+  - Analysis of multiple sessions from a PHD2 log, with night-wide diagnostics.
 - **Worm Gear Period Estimation**: Automatic detection with confidence scoring.
 - **Polar Alignment Error Estimation**: Calculate Az/Alt errors in arcminutes and screw turns.
 - **Statistical Analysis**:
@@ -53,14 +53,13 @@ Detects and flags common guiding issues:
 - Clear, step-by-step suggestions for improving guiding performance.
 
 ### 📤 **Data Export**
-- **CSV Export**: Raw and processed guiding data.
-- **JSON Export**: Full session metadata and analysis results.
-- **PDF Reports**: Professional-quality reports for sharing or archiving.
+- **CSV Export**: Raw guiding measurements and guide pulses, with millisecond timestamps.
+- **JSON Export**: Session identity, statistics, dominant FFT peaks and anomalies.
 
 ### 🔄 **Multi-Session Support**
-- Compare multiple guiding sessions side-by-side.
-- Overlay FFT spectra to identify recurring issues.
-- Track improvements over time.
+- Select a session from the loaded log.
+- Analyze night-wide RMS, altitude dependence and polar-alignment geometry.
+- A standalone multi-file comparison service exists in the code, but its controls are not exposed in the current view. PDF report export is also not exposed.
 
 ---
 
