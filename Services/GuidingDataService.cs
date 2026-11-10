@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using GuidingAnalyzer.Models;
@@ -17,8 +18,38 @@ namespace GuidingAnalyzer.Services
 
         public async Task<List<GuidingSession>> LoadAllSessionsAsync(string filePath)
         {
-            var lines = await File.ReadAllLinesAsync(filePath);
+            var lines = await ReadLinesSharedAsync(filePath);
             return ParseAllSessions(filePath, lines);
+        }
+
+        private static async Task<string[]> ReadLinesSharedAsync(string filePath)
+        {
+            // ReadWrite sharing: PHD2 keeps the active log open for writing
+            string text;
+            using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read,
+                       FileShare.ReadWrite | FileShare.Delete, bufferSize: 4096, useAsync: true))
+            using (var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+            {
+                text = await reader.ReadToEndAsync();
+            }
+
+            var lines = new List<string>();
+            using (var sr = new StringReader(text))
+            {
+                string? line;
+                while ((line = sr.ReadLine()) != null) lines.Add(line);
+            }
+
+            // Drop a data row PHD2 has only partly written
+            bool endsWithNewline = text.Length > 0 && (text[^1] == '\n' || text[^1] == '\r');
+            if (!endsWithNewline && lines.Count > 0)
+            {
+                var last = lines[^1].TrimStart();
+                if (last.Length > 0 && char.IsDigit(last[0]))
+                    lines.RemoveAt(lines.Count - 1);
+            }
+
+            return lines.ToArray();
         }
 
         // ────────────────────────────────────────────────────────────────────
