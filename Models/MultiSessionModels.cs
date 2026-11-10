@@ -103,7 +103,7 @@ namespace GuidingAnalyzer.Models
         /// <summary>Series label in the OxyPlot legend</summary>
         public string SessionLabel { get; set; } = string.Empty;
 
-        /// <summary>Frequencies in Hz (same layout as FftResult.Frequencies)</summary>
+        /// <summary>Frequencies in Hz, converted from FftResult's cycles/hour.</summary>
         public double[] Frequencies { get; set; } = Array.Empty<double>();
 
         /// <summary>Amplitudes in arcsec</summary>

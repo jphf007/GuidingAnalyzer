@@ -6,6 +6,11 @@ Special thanks to **@ccharhut** for [pull request #3](https://github.com/jphf007
 
 ## Fixes and improvements
 
+- Prevent the OxyPlot model-sharing exception reported in [issue #2](https://github.com/jphf007/GuidingAnalyzer/issues/2) when docking creates multiple views of the same analysis. Each view now owns its graphical models, while the analysis data and reconstructed point values remain shared.
+- Retain a complete final log frame even when the file has no trailing newline, while continuing to ignore incomplete final rows.
+- Convert comparison FFT spectra from cycles/hour to Hz correctly and count recurring peaks by distinct sessions, not by the number of nearby peaks.
+- Ignore unknown pier sides and capitalization differences when detecting meridian flips; report RMS differences relative to the lower RMS and preserve the chronological after-flip flag.
+
 - Correctly read negative calibration angles instead of displaying zero.
 - Avoid false DEC backlash alerts caused by zero-duration pulses; distinguish real pulse reversals from dithering and interrupted measurements.
 - Require actual corrective pulses before reporting possible over-correction.
@@ -27,7 +32,7 @@ Special thanks to **@ccharhut** for [pull request #3](https://github.com/jphf007
 
 ## Validation and installation
 
-54 automated tests pass, including @ccharhut's active-log test. The previous audit also replayed a real log containing 16 sessions and 7,659 frames, verified RA/DEC reconstruction point by point, and rendered all seven WPF tabs without binding errors.
+63 automated tests pass, including @ccharhut's active-log test and the multi-view crash regression. A real log containing 16 sessions and 7,659 frames was replayed again after these fixes: RA/DEC reconstruction matched 1.0.0.4 point by point, and all seven WPF tabs rendered without binding errors.
 
 Close N.I.N.A., back up the existing plugin folder, and extract the **entire contents** of `GuidingAnalyzer-v1.0.0.5-preview.zip` into `%LOCALAPPDATA%\NINA\Plugins\3.0.0\GuidingAnalyzer\`.
 

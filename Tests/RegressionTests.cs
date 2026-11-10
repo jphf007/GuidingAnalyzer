@@ -513,6 +513,38 @@ public class RegressionTests
         finally { File.Delete(path); }
     }
 
+    [Fact]
+    public void TwoDockedViewsCanDisplayTheSameAnalysisWithoutSharingPlotModels()
+    {
+        RunSta(() => {
+            var vm = new GuidingAnalyzerVM();
+            var first = new GuidingAnalyzerView { DataContext = vm };
+            first.Measure(new Size(1200, 900)); first.Arrange(new Rect(0, 0, 1200, 900)); Pump();
+            var second = new GuidingAnalyzerView { DataContext = vm };
+            second.Measure(new Size(1200, 900)); second.Arrange(new Rect(0, 0, 1200, 900)); Pump();
+            var names = new[] { "GuidingPlot", "MountPlot", "FftRaPlotView", "FftDecPlotView",
+                "FftRaUncorrPlotView", "FftDecUncorrPlotView", "CalibrationPlotView",
+                "RmsVsAltitudePlotView", "SlidingRmsPlotView" };
+            void Verify()
+            {
+                foreach (var name in names) {
+                    var a = (OxyPlot.Wpf.PlotView)first.FindName(name);
+                    var b = (OxyPlot.Wpf.PlotView)second.FindName(name);
+                    Assert.NotNull(a.Model); Assert.NotNull(b.Model);
+                    Assert.NotSame(a.Model, b.Model);
+                    var aLine = a.Model.Series.OfType<OxyPlot.Series.LineSeries>().FirstOrDefault();
+                    var bLine = b.Model.Series.OfType<OxyPlot.Series.LineSeries>().FirstOrDefault();
+                    if (aLine != null) Assert.Equal(aLine.Points, bLine!.Points);
+                }
+            }
+            Verify();
+            vm.CurrentSession = Night(48.8, 3, -2)[0];
+            vm.ShowDriftCorrected = true; Pump(); Verify();
+            vm.ShowDriftCorrected = false; Pump(); Verify();
+            first.DataContext = null; second.DataContext = null; Pump();
+        });
+    }
+
     private static readonly DateTime Epoch = new(2026, 10, 8, 20, 0, 0);
     internal static List<GuidingSession> Night(double lat, double az, double alt)
         => new[] { -3.0, 0.0, 3.0 }.Select((ha, i) => TrackingSession(lat, az, alt, ha, i == 1 ? -1 : 1, i)).ToList();

@@ -82,7 +82,7 @@ namespace GuidingAnalyzer.Services
             {
                 EstimatedLatitudeDeg = latDeg,
                 MeridianFlipDetected = allSessions
-                    .Select(s => s.SessionInfo?.PierSide ?? "").Where(p => p != "").Distinct().Count() >= 2,
+                    .Select(s => NormalizePierSide(s.SessionInfo?.PierSide)).Where(p => p != "").Distinct().Count() >= 2,
             };
 
             result.WormPeriod = EstimateWormPeriod(allSessions);
@@ -129,7 +129,7 @@ namespace GuidingAnalyzer.Services
                             Timestamp = ptM.Timestamp, ElapsedMin = (ptM.Timestamp - t0.Value).TotalMinutes,
                             RaRms = raRms, DecRms = decRms, TotalRms = Math.Sqrt(raRms * raRms + decRms * decRms),
                             AltitudeDeg = ComputeAltitude(latDeg, info.DecDeg, info.HourAngle * 15, sessM.StartTime, ptM.Timestamp),
-                            PierSide = info.PierSide, SessionIndex = sessM.SessionIndex
+                            PierSide = NormalizePierSide(info.PierSide), SessionIndex = sessM.SessionIndex
                         });
                     }
                 }
@@ -142,13 +142,18 @@ namespace GuidingAnalyzer.Services
         {
             if (sliding.Count == 0) return new();
             var result = new List<RmsVsAltitudePoint>();
-            string? firstSide = sliding[0].PierSide;
+            string? previousKnownSide = null;
             bool flipped = false;
             double lastElapsed = double.MinValue;
 
             foreach (var pt in sliding)
             {
-                if (!flipped && pt.PierSide != firstSide) flipped = true;
+                string side = NormalizePierSide(pt.PierSide);
+                if (side != "")
+                {
+                    if (previousKnownSide != null && side != previousKnownSide) flipped = true;
+                    previousKnownSide = side;
+                }
                 if (pt.ElapsedMin - lastElapsed < 2.0) continue;
                 if (pt.TotalRms <= 0) continue;
                 lastElapsed = pt.ElapsedMin;
@@ -164,7 +169,7 @@ namespace GuidingAnalyzer.Services
                     DecRms       = pt.DecRms,
                     TotalRms     = pt.TotalRms,
                     PierSide     = pt.PierSide,
-                    IsAfterFlip  = flipped && pt.PierSide != firstSide,
+                    IsAfterFlip  = flipped,
                 });
             }
             return result;
@@ -191,7 +196,7 @@ namespace GuidingAnalyzer.Services
             {
                 double hi = Math.Max(d.RmsWestMean, d.RmsEastMean);
                 double lo = Math.Min(d.RmsWestMean, d.RmsEastMean);
-                d.FlipDeltaPercent = hi > 0 ? (hi - lo) / hi * 100 : 0;
+                d.FlipDeltaPercent = lo > 0 ? (hi - lo) / lo * 100 : 0;
             }
 
             double maxAlt = valid.Max(p => p.AltitudeDeg);
@@ -225,7 +230,7 @@ namespace GuidingAnalyzer.Services
                 d.Cause = DegradationCause.MeridianFlip; d.DiagnosisIcon = "🔄"; d.DiagnosisColor = "#FFC107";
                 string worse  = d.RmsWestMean > d.RmsEastMean ? "Ouest" : "Est";
                 string better = worse == "Ouest" ? "Est" : "Ouest";
-                d.MainMessage   = $"West/East asymmetry: +{d.FlipDeltaPercent:F0}% RMS after meridian flip";
+                d.MainMessage   = $"West/East RMS difference: {d.FlipDeltaPercent:F0}% relative to the lower RMS";
                 d.DetailMessage = $"RMS {worse} = {Math.Max(d.RmsWestMean, d.RmsEastMean):F3}\"  ·  "
                                 + $"RMS {better} = {Math.Min(d.RmsWestMean, d.RmsEastMean):F3}\". "
                                 + "Backlash Dec non compensé, flexion asymétrique, ou déséquilibre différent des deux côtés.";
@@ -297,6 +302,9 @@ namespace GuidingAnalyzer.Services
         }
 
         // ── Utilities ───────────────────────────────────────────────────────
+        private static string NormalizePierSide(string? value) =>
+            string.Equals(value?.Trim(), "West", StringComparison.OrdinalIgnoreCase) ? "West"
+            : string.Equals(value?.Trim(), "East", StringComparison.OrdinalIgnoreCase) ? "East" : "";
         private static double Rms(IEnumerable<double> v) { var l = v.ToList(); if (l.Count==0) return 0; double m=l.Average(); return Math.Sqrt(l.Sum(x=>(x-m)*(x-m))/l.Count); }
         private static double PearsonR(List<double> xs, List<double> ys) { if (xs.Count!=ys.Count||xs.Count<2) return 0; double mx=xs.Average(),my=ys.Average(); double n=xs.Zip(ys,(x,y)=>(x-mx)*(y-my)).Sum(),dx=Math.Sqrt(xs.Sum(x=>(x-mx)*(x-mx))),dy=Math.Sqrt(ys.Sum(y=>(y-my)*(y-my))); return (dx<1e-10||dy<1e-10)?0:n/(dx*dy); }
         private static double LinearSlope(List<double> xs, List<double> ys) { if (xs.Count<2) return 0; double mx=xs.Average(),my=ys.Average(); double n=xs.Zip(ys,(x,y)=>(x-mx)*(y-my)).Sum(),d=xs.Sum(x=>(x-mx)*(x-mx)); return d<1e-10?0:n/d; }

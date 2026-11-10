@@ -243,6 +243,7 @@ namespace GuidingAnalyzer
         [ObservableProperty] private PlotModel _fftRaUncorrectedPlot   = null!;
         [ObservableProperty] private PlotModel _fftDecUncorrectedPlot  = null!;
         [ObservableProperty] private PlotModel _calibrationPlot        = null!;
+        private AltitudeAnalysisResult? _altitudePresentationData;
 
         // ── Selected FFT mode ─────────────────────────────────────────────────
         [ObservableProperty] private bool _fftShowCorrected   = true;
@@ -487,6 +488,7 @@ namespace GuidingAnalyzer
         private void ResetSessionDisplay()
         {
             CurrentSession = null;
+            _altitudePresentationData = null;
             IsLoading = false;
             RaRmsText = DecRmsText = TotalRmsText = RaDriftText = DecDriftText = FrameCountText = QualityGradeText = "—";
             RaDriftConfidence = DecDriftConfidence = "";
@@ -646,6 +648,28 @@ namespace GuidingAnalyzer
             FftRaUncorrectedPlot  = BuildFftPlot(session.FftRaUncorrected,  "FFT Spectrum — RA (Guided residuals)",  OxyColors.SteelBlue);
             FftDecUncorrectedPlot = BuildFftPlot(session.FftDecUncorrected, "FFT Spectrum — DEC (Guided residuals)", OxyColors.Orange);
             CalibrationPlot  = BuildCalibrationPlot(session.Calibration);
+        }
+
+        // Reuse the exact plot builders, but never share their mutable PlotModel
+        // instances between WPF views. The analysis, point values and VM state remain shared.
+        internal PlotModel CreatePlotForView(string propertyName, PlotModel source)
+        {
+            var session = CurrentSession;
+            if (session == null) return CreateEmptyPlot(source.Title);
+            return propertyName switch {
+                nameof(GuidingCurvePlot) => BuildGuidingCurvePlot(session),
+                nameof(MountCurvePlot) => BuildMountCurvePlot(session),
+                nameof(FftRaPlot) => BuildFftPlot(session.FftRa, source.Title, OxyColors.SteelBlue),
+                nameof(FftDecPlot) => BuildFftPlot(session.FftDec, source.Title, OxyColors.Orange),
+                nameof(FftRaUncorrectedPlot) => BuildFftPlot(session.FftRaUncorrected, source.Title, OxyColors.SteelBlue),
+                nameof(FftDecUncorrectedPlot) => BuildFftPlot(session.FftDecUncorrected, source.Title, OxyColors.Orange),
+                nameof(CalibrationPlot) => BuildCalibrationPlot(session.Calibration),
+                nameof(RmsVsAltitudePlot) => _altitudePresentationData == null ? CreateEmptyPlot(source.Title)
+                    : BuildRmsVsAltitudePlot(_altitudePresentationData),
+                nameof(SlidingRmsPlot) => _altitudePresentationData == null ? CreateEmptyPlot(source.Title)
+                    : BuildSlidingRmsPlot(_altitudePresentationData),
+                _ => throw new ArgumentException("Unknown plot property", nameof(propertyName))
+            };
         }
 
         /// <summary>
@@ -1396,12 +1420,16 @@ namespace GuidingAnalyzer
             double? lat = _altitudeService.EstimateSiteLatitude(allSessions);
             if (lat == null)
             {
+                _altitudePresentationData = null;
                 HasAltitudeData      = false;
+                RmsVsAltitudePlot = CreateEmptyPlot("RMS vs Altitude");
+                SlidingRmsPlot = CreateEmptyPlot("Sliding RMS and altitude");
                 AltitudeLatitudeText = "Latitude cannot be computed (insufficient data)";
                 return;
             }
 
             var result = _altitudeService.Analyze(session, allSessions, lat.Value);
+            _altitudePresentationData = result;
 
             AltitudeLatitudeText   = $"Estimated latitude: {Math.Abs(lat.Value):F1}° {(lat.Value < 0 ? "S" : "N")}";
             AltitudeMeridianFlip   = result.MeridianFlipDetected;

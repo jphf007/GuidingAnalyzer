@@ -372,7 +372,7 @@ namespace GuidingAnalyzer.Services
                     result.FftRaSpectra.Add(new FftComparisonResult
                     {
                         SessionLabel = label,
-                        Frequencies  = fftRa.Frequencies,
+                        Frequencies  = fftRa.Frequencies.Select(f => f / 3600.0).ToArray(),
                         Amplitudes   = fftRa.Amplitudes,
                         Peaks        = fftRa.SignificantPeaks,
                         Axis         = GuidingAxis.RA,
@@ -386,7 +386,7 @@ namespace GuidingAnalyzer.Services
                     result.FftDecSpectra.Add(new FftComparisonResult
                     {
                         SessionLabel = label,
-                        Frequencies  = fftDec.Frequencies,
+                        Frequencies  = fftDec.Frequencies.Select(f => f / 3600.0).ToArray(),
                         Amplitudes   = fftDec.Amplitudes,
                         Peaks        = fftDec.SignificantPeaks,
                         Axis         = GuidingAxis.Dec,
@@ -410,17 +410,19 @@ namespace GuidingAnalyzer.Services
 
             // Collecter tous les pics de tous les spectres
             var allPeaks = spectra
-                .SelectMany(s => s.Peaks.Select(p => (
+                .Select((s, index) => (Spectrum: s, Session: index))
+                .SelectMany(s => s.Spectrum.Peaks.Select(p => (
                     FreqHz:      p.FrequencyCph / 3600.0,   // CPH → Hz
                     AmplArcsec:  p.AmplitudeArcsec,
-                    Interpretation: p.Interpretation
+                    Interpretation: p.Interpretation,
+                    Session: s.Session
                 )))
                 .ToList();
 
             if (allPeaks.Count == 0) return new();
 
             // Regrouper les pics proches en fréquence
-            var groups = new List<List<(double FreqHz, double Ampl, string Interp)>>();
+            var groups = new List<List<(double FreqHz, double Ampl, string Interp, int Session)>>();
 
             foreach (var peak in allPeaks.OrderBy(p => p.FreqHz))
             {
@@ -437,6 +439,7 @@ namespace GuidingAnalyzer.Services
             int minSessions = Math.Max(2, (int)Math.Ceiling(totalSessions * RecurrenceThreshold));
 
             return groups
+                .Select(g => g.GroupBy(p => p.Session).Select(s => s.OrderByDescending(p => p.Ampl).First()).ToList())
                 .Where(g => g.Count >= minSessions)
                 .Select(g => new RecurringFftPeak
                 {

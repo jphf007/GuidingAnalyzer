@@ -46,7 +46,17 @@ namespace GuidingAnalyzer.Services
             {
                 var last = lines[^1].TrimStart();
                 if (last.Length > 0 && char.IsDigit(last[0]))
-                    lines.RemoveAt(lines.Count - 1);
+                {
+                    // A closed or copied log can have a complete row without a final newline.
+                    // Reject an unfinished row, rather than discarding every unterminated row.
+                    int header = lines.FindLastIndex(l => l.TrimStart().StartsWith("Frame,"));
+                    var columns = header >= 0 ? lines[header].Split(',') : Array.Empty<string>();
+                    var fields = last.Split(',');
+                    int errorColumn = Array.FindIndex(columns, c => c.Trim().Equals("ErrorCode", StringComparison.OrdinalIgnoreCase));
+                    bool complete = columns.Length > 0 && fields.Length >= columns.Length && errorColumn >= 0
+                        && int.TryParse(fields[errorColumn].Trim().Trim('"'), NumberStyles.Integer, CultureInfo.InvariantCulture, out _);
+                    if (!complete) lines.RemoveAt(lines.Count - 1);
+                }
             }
 
             return lines.ToArray();

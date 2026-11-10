@@ -11,6 +11,8 @@ L'identifiant permanent du plugin reste `A1B2C3D4-E5F6-7890-ABCD-EF1234567890`, 
 ## Défauts reproduits et corrigés
 
 - Contribution de **@ccharhut**, [PR #3](https://github.com/jphf007/GuidingAnalyzer/pull/3) : lecture d'un log encore ouvert en écriture par PHD2 via partage ReadWrite/Delete, avec abandon de la dernière ligne de données si elle est encore partiellement écrite. La proposition et son test ont été fusionnés, puis vérifiés avec les correctifs locaux.
+- Revue complémentaire après synchronisation : conservation d'une dernière ligne complète sans saut de ligne, conversion correcte des fréquences de comparaison CPH vers Hz, récurrence comptée par sessions distinctes, rejet des faux flips dus à `Unknown` ou à la casse, pourcentage RMS relatif à la plus faible valeur et chronologie conservée après plusieurs flips.
+- Crash d'ouverture de l'onglet Imaging ([signalement #2](https://github.com/jphf007/GuidingAnalyzer/issues/2)) : le journal public indique `This PlotModel is already in use by some other PlotView control`. Le test de deux vues d'un même VM a reproduit exactement cette exception avant correction. Les modèles graphiques sont maintenant générés par vue via les mêmes fonctions de tracé ; les données d'analyse et les valeurs des points ne changent pas. Le test couvre les neuf graphiques et une actualisation de la correction de dérive.
 
 - Lecture du log : une calibration échouée ou un en-tête tronqué pouvait absorber la session suivante ; les lignes absentes, NaN ou invalides ne doivent pas devenir des mesures valides à zéro. Les dates de début utilisent un format invariant.
 - Calibration : les angles négatifs, présents dans le log utilisateur (-179.5° et -88.2°), étaient affichés à zéro. Les angles sont maintenant lus avec leur signe, dans la calibration et dans l'en-tête de session.
@@ -26,7 +28,7 @@ L'identifiant permanent du plugin reste `A1B2C3D4-E5F6-7890-ABCD-EF1234567890`, 
 
 ## Validation
 
-- Restauration des dépendances et compilation Release ; 54 tests portables réussis, avec le test de log actif de @ccharhut, les tests WPF sous culture française et les simulations indépendantes de rotation 3D.
+- Restauration des dépendances et compilation Release ; 63 tests portables réussis, avec le test de log actif de @ccharhut, les tests WPF sous culture française, les simulations indépendantes de rotation 3D et la régression du crash multi-vues. Lors de la revue complémentaire, sept cas de comparaison/lecture ont d'abord échoué et un huitième test a reproduit le crash OxyPlot avant les corrections ; neuf cas de test ont été ajoutés au total.
 - Six tests ajoutés ont d'abord échoué sur la version de départ, confirmant les défauts de statistiques, inversions DEC, période sur bruit, latitude sud, fenêtres RMS et lecture de sessions tronquées ; ils passent après correction. D'autres tests couvrent les défauts trouvés ensuite.
 - Rejeu supplémentaire du log fourni : 16 sessions, 7 659 images. Comparaison exacte de chaque point reconstruit RA et DEC avec 1.0.0.4 ; continuité des raccordements DEC après dithering.
 - Exécution du véritable contrôle WPF et de son template N.I.N.A. : sept onglets rendus et inspectés, zéro erreur de liaison WPF sur le scénario réel ; exports CSV et JSON relus.

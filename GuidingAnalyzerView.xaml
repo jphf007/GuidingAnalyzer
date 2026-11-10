@@ -281,7 +281,7 @@
 
                     <!-- Courbe erreurs brutes -->
                     <Grid Grid.Row="1">
-                        <oxy:PlotView Model="{Binding GuidingCurvePlot}" Background="#1E1E2E" Margin="4"
+                        <oxy:PlotView Model="{local:PlotForView GuidingCurvePlot}" Background="#1E1E2E" Margin="4"
                                       x:Name="GuidingPlot"
                                       MouseMove="PlotView_MouseMove"
                                       MouseLeave="PlotView_MouseLeave"/>
@@ -295,7 +295,7 @@
 
                     <!-- Courbe monture reconstituée -->
                     <Grid Grid.Row="2">
-                        <oxy:PlotView Model="{Binding MountCurvePlot}" Background="#1E1E2E" Margin="4"
+                        <oxy:PlotView Model="{local:PlotForView MountCurvePlot}" Background="#1E1E2E" Margin="4"
                                       x:Name="MountPlot"
                                       MouseMove="PlotView_MouseMove"
                                       MouseLeave="PlotView_MouseLeave"/>
@@ -379,7 +379,7 @@
 
                         <!-- Corrections removed -->
                         <Grid Visibility="{Binding FftShowCorrected, Converter={StaticResource BoolToVis}}">
-                            <oxy:PlotView Model="{Binding FftRaPlot}" Background="#1E1E2E" Margin="4"
+                            <oxy:PlotView Model="{local:PlotForView FftRaPlot}" Background="#1E1E2E" Margin="4"
                                           x:Name="FftRaPlotView"/>
                             <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
                                     Padding="6,2" FontSize="10" Background="#333355" Foreground="#AAAACC"
@@ -388,7 +388,7 @@
                         </Grid>
                         <!-- Guided residuals -->
                         <Grid Visibility="{Binding FftShowUncorrected, Converter={StaticResource BoolToVis}}">
-                            <oxy:PlotView Model="{Binding FftRaUncorrectedPlot}" Background="#1E1E2E" Margin="4"
+                            <oxy:PlotView Model="{local:PlotForView FftRaUncorrectedPlot}" Background="#1E1E2E" Margin="4"
                                           x:Name="FftRaUncorrPlotView"/>
                             <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
                                     Padding="6,2" FontSize="10" Background="#333355" Foreground="#AAAACC"
@@ -442,7 +442,7 @@
 
                         <!-- Corrections removed -->
                         <Grid Visibility="{Binding FftShowCorrected, Converter={StaticResource BoolToVis}}">
-                            <oxy:PlotView Model="{Binding FftDecPlot}" Background="#1E1E2E" Margin="4"
+                            <oxy:PlotView Model="{local:PlotForView FftDecPlot}" Background="#1E1E2E" Margin="4"
                                           x:Name="FftDecPlotView"/>
                             <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
                                     Padding="6,2" FontSize="10" Background="#333355" Foreground="#AAAACC"
@@ -451,7 +451,7 @@
                         </Grid>
                         <!-- Guided residuals -->
                         <Grid Visibility="{Binding FftShowUncorrected, Converter={StaticResource BoolToVis}}">
-                            <oxy:PlotView Model="{Binding FftDecUncorrectedPlot}" Background="#1E1E2E" Margin="4"
+                            <oxy:PlotView Model="{local:PlotForView FftDecUncorrectedPlot}" Background="#1E1E2E" Margin="4"
                                           x:Name="FftDecUncorrPlotView"/>
                             <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,14,0"
                                     Padding="6,2" FontSize="10" Background="#333355" Foreground="#AAAACC"
@@ -1001,8 +1001,7 @@
 
                             <!-- ── Graphique ── -->
                             <TextBlock Text="Calibration curve" Foreground="#64B5F6" FontWeight="Bold" FontSize="12" Margin="0,4,0,6"/>
-                            <oxy:PlotView Model="{Binding DataContext.CalibrationPlot,
-                                          RelativeSource={RelativeSource AncestorType=TabControl}}"
+                            <oxy:PlotView Model="{local:PlotForView CalibrationPlot}"
                                           x:Name="CalibrationPlotView"
                                           Background="#1E1E2E" Height="300" Margin="0,0,0,10"/>
 
@@ -1474,7 +1473,7 @@
                                 <!-- Scatter plot RMS vs Alt -->
                                 <TextBlock Text="RMS vs Altitude (⬤ Ouest, ▲ Est)" Foreground="#AAAACC" FontSize="10" Margin="0,0,0,4"/>
                                 <oxy:PlotView x:Name="RmsVsAltitudePlotView"
-                                              Model="{Binding RmsVsAltitudePlot}" Height="240"
+                                              Model="{local:PlotForView RmsVsAltitudePlot}" Height="240"
                                               Background="Transparent" Foreground="White"
                                               MouseMove="PlotView_MouseMove"
                                               MouseLeave="PlotView_MouseLeave"/>
@@ -1490,7 +1489,7 @@
                                 <TextBlock Foreground="#AAAACC" FontSize="10" Margin="0,0,0,8"
                                            Text="{Binding AltitudeWindowLabel}"/>
                                 <oxy:PlotView x:Name="SlidingRmsPlotView"
-                                              Model="{Binding SlidingRmsPlot}" Height="280"
+                                              Model="{local:PlotForView SlidingRmsPlot}" Height="280"
                                               Background="Transparent" Foreground="White"
                                               MouseMove="PlotView_MouseMove"
                                               MouseLeave="PlotView_MouseLeave"/>
