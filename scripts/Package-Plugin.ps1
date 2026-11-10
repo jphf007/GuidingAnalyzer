@@ -31,11 +31,8 @@ $entries = @(Get-ChildItem -LiteralPath $output -Filter '*.dll' | Where-Object {
 foreach ($name in @('plugin.json', 'LICENSE.txt')) {
     $entries += @{ Source = Join-Path $repoRoot $name; Name = $name }
 }
-$validationName = "Validation-$($manifest.Version).md"
-$entries += @{ Source = Join-Path $repoRoot "Docs/$validationName"; Name = $validationName }
-foreach ($previousNotes in Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Docs') -Filter 'Validation-*.md' | Where-Object Name -ne $validationName) {
-    $entries += @{ Source = $previousNotes.FullName; Name = $previousNotes.Name }
-}
+$releaseNotesName = "Release-$($manifest.Version).md"
+$entries += @{ Source = Join-Path $repoRoot "Docs/$releaseNotesName"; Name = $releaseNotesName }
 $binaryZip = Join-Path $artifactDir "GuidingAnalyzer-v$($manifest.Version)-preview.zip"
 Write-Zip $binaryZip $entries
 
